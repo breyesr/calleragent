@@ -1,2 +1,3 @@
-# Import your models here so Alembic can discover them
-# from ..models.user import User  # example
+from ..models import Appointment, Base, Client, User
+
+__all__ = ["Base", "User", "Client", "Appointment"]
