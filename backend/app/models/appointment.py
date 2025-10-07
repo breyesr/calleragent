@@ -1,11 +1,16 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, DateTime, Text, ForeignKey
-from .user import Base
+
+from .base import Base
+
 
 class Appointment(Base):
     __tablename__ = "appointments"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True)
-    starts_at: Mapped["datetime"] = mapped_column(DateTime(timezone=True))
-    ends_at: Mapped["datetime"] = mapped_column(DateTime(timezone=True))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, nullable=False)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
