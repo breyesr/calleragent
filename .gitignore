@@ -9,6 +9,7 @@ __pycache__/
 # General
 .env
 .env.*
+!/.env
 .DS_Store
 dist/
 build/

@@ -1,2 +1,71 @@
 version: "3.9"
-services: {}
+
+services:
+  db:
+    image: postgres:15
+    container_name: agentcaller-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${PG_PORT}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: agentcaller-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: agentcaller-backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env.example
+    environment:
+      # override DB/Redis to point at Compose services
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: docker
+      API_V1_PREFIX: /v1
+      SECRET_KEY: change-this-in-prod
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${API_PORT}:8000"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: agentcaller-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:${API_PORT}"
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT}:3000"
+
+volumes:
+  db_data:
