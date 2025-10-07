@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from ..deps import get_db
 from ..schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentUpdate
-from ...models import Appointment, Client
+from app.models.appointment import Appointment
+from app.models.client import Client
 
 router = APIRouter()
 

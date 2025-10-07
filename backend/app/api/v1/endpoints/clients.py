@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..deps import get_db
 from ..schemas.client import ClientCreate, ClientOut, ClientUpdate
-from ...models import Client
+from app.models.client import Client
 
 router = APIRouter()
 
