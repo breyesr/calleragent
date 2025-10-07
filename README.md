@@ -10,3 +10,8 @@ Monorepo: frontend (Next.js) + backend (FastAPI). Infrastructure manifests live 
 ## Backend Smoke Test
 
 Run `backend/scripts/smoke.sh` (after the stack is up) to verify the health endpoint and the MVP clients/appointments flows. The script waits for `http://localhost:8000/healthz`, then exercises the CRUD endpoints using `curl` (pretty-printed with `jq` when available).
+
+## Frontend UI
+
+1. `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build`
+2. Open `http://localhost:3002/clients` and `http://localhost:3002/appointments` to exercise the dashboards.
