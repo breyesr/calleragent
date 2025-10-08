@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..deps import get_db
+from ..deps import get_current_user, get_db
 from ..schemas.client import ClientCreate, ClientOut, ClientUpdate
 from app.models.client import Client
+from app.models.user import User
 
 router = APIRouter()
 
@@ -20,7 +21,11 @@ def list_clients(q: str | None = Query(default=None, description="Optional searc
 
 
 @router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
-def create_client(payload: ClientCreate, db: Session = Depends(get_db)) -> ClientOut:
+def create_client(
+    payload: ClientCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ClientOut:
     client = Client(**payload.model_dump())
     db.add(client)
     db.commit()
@@ -37,7 +42,12 @@ def get_client(client_id: int, db: Session = Depends(get_db)) -> ClientOut:
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
-def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db)) -> ClientOut:
+def update_client(
+    client_id: int,
+    payload: ClientUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ClientOut:
     client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
