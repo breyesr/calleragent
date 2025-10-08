@@ -7,12 +7,16 @@ import Input from "@/components/Input";
 import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import { api } from "@/lib/api-client";
-import type { components } from "@/lib/api-types";
+import type { paths } from "@/lib/api-types";
 
-type Client = components["schemas"]["ClientOut"];
-type Appointment = components["schemas"]["AppointmentOut"];
-type AppointmentCreate = components["schemas"]["AppointmentCreate"];
-type AppointmentUpdate = components["schemas"]["AppointmentUpdate"];
+type ClientsResponse = paths["/v1/clients"]["get"]["responses"][200]["content"]["application/json"];
+type Client = ClientsResponse[number];
+type AppointmentsResponse = paths["/v1/appointments"]["get"]["responses"][200]["content"]["application/json"];
+type Appointment = AppointmentsResponse[number];
+type AppointmentCreateBody = paths["/v1/appointments"]["post"]["requestBody"]["content"]["application/json"];
+type AppointmentCreateResponse = paths["/v1/appointments"]["post"]["responses"][201]["content"]["application/json"];
+type AppointmentUpdateBody = paths["/v1/appointments/{appointment_id}"]["patch"]["requestBody"]["content"]["application/json"];
+type AppointmentUpdateResponse = paths["/v1/appointments/{appointment_id}"]["patch"]["responses"][200]["content"]["application/json"];
 
 const toDateTimeLocal = (iso: string) => {
   const date = new Date(iso);
@@ -59,13 +63,13 @@ export default function AppointmentsPage() {
     let cancelled = false;
     async function loadClients() {
       try {
-        const data = await api.get("/v1/clients");
+        const data = await api<ClientsResponse>("/v1/clients");
         if (!cancelled) {
           setClients(data);
         }
       } catch (err) {
         if (!cancelled) {
-          setClientsError(err instanceof Error ? err.message : "Failed to load clients");
+          setClientsError(err instanceof Error ? err.message : String(err));
         }
       }
     }
@@ -81,13 +85,13 @@ export default function AppointmentsPage() {
       setAppointmentsLoading(true);
       setAppointmentsError(null);
       try {
-        const data = await api.get("/v1/appointments");
+        const data = await api<AppointmentsResponse>("/v1/appointments");
         if (!cancelled) {
           setAppointments(data);
         }
       } catch (err) {
         if (!cancelled) {
-          setAppointmentsError(err instanceof Error ? err.message : "Failed to load appointments");
+          setAppointmentsError(err instanceof Error ? err.message : String(err));
           setAppointments([]);
         }
       } finally {
@@ -140,20 +144,20 @@ export default function AppointmentsPage() {
 
     setCreating(true);
     try {
-      await api.post(
-        "/v1/appointments",
-        {
+      await api<AppointmentCreateResponse>("/v1/appointments", {
+        method: "POST",
+        body: JSON.stringify({
           client_id: Number(createClientId),
           starts_at: startIso,
           ends_at: endIso,
           notes: createNotes.trim() ? createNotes.trim() : null,
-        } satisfies AppointmentCreate,
-      );
+        } satisfies AppointmentCreateBody),
+      });
       setCreateSuccess("Appointment scheduled.");
       resetCreateForm();
       setRefreshKey((value) => value + 1);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create appointment.");
+      setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -163,10 +167,10 @@ export default function AppointmentsPage() {
     const confirmed = window.confirm("Delete this appointment?");
     if (!confirmed) return;
     try {
-      await api.delete("/v1/appointments/{appointment_id}", { params: { appointment_id: appointment.id } });
+      await api<void>(`/v1/appointments/${appointment.id}`, { method: "DELETE" });
       setRefreshKey((value) => value + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete appointment.");
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -209,20 +213,19 @@ export default function AppointmentsPage() {
 
     setEditing(true);
     try {
-      await api.patch(
-        "/v1/appointments/{appointment_id}",
-        {
+      await api<AppointmentUpdateResponse>(`/v1/appointments/${selectedAppointment.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
           starts_at: startIso,
           ends_at: endIso,
           notes: editNotes.trim() ? editNotes.trim() : null,
-        } satisfies AppointmentUpdate,
-        { params: { appointment_id: selectedAppointment.id } },
-      );
+        } satisfies AppointmentUpdateBody),
+      });
       setEditSuccess("Appointment updated.");
       setEditOpen(false);
       setRefreshKey((value) => value + 1);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "Failed to update appointment.");
+      setEditError(err instanceof Error ? err.message : String(err));
     } finally {
       setEditing(false);
     }
