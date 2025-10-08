@@ -2,15 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
+import type { components } from "@/lib/api-types";
 
-type Client = {
-  id: number;
-  name: string;
-  phone: string;
-};
+type Client = components["schemas"]["ClientOut"];
+type CreateClientBody = components["schemas"]["ClientCreate"];
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -43,8 +41,8 @@ export default function ClientsPage() {
       setLoading(true);
       setError(null);
       try {
-        const searchParam = debouncedQuery ? `?q=${encodeURIComponent(debouncedQuery)}` : "";
-        const data = await api<Client[]>(`/v1/clients${searchParam}`);
+        const queryParam = debouncedQuery ? { q: debouncedQuery } : undefined;
+        const data = await api.get("/v1/clients", queryParam ? { query: queryParam } : undefined);
         if (!cancelled) {
           setClients(data);
         }
@@ -79,10 +77,7 @@ export default function ClientsPage() {
 
     setSubmitting(true);
     try {
-      await api<Client>("/v1/clients", {
-        method: "POST",
-        body: JSON.stringify({ name: formName.trim(), phone: formPhone.trim() }),
-      });
+      await api.post("/v1/clients", { name: formName.trim(), phone: formPhone.trim() } satisfies CreateClientBody);
       setFormSuccess("Client added successfully.");
       setFormName("");
       setFormPhone("");

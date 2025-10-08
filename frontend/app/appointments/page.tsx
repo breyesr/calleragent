@@ -6,21 +6,13 @@ import Button from "@/components/Button";
 import Input from "@/components/Input";
 import Modal from "@/components/Modal";
 import Select from "@/components/Select";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import type { components } from "@/lib/api-types";
 
-type Client = {
-  id: number;
-  name: string;
-  phone: string;
-};
-
-type Appointment = {
-  id: number;
-  client_id: number;
-  starts_at: string;
-  ends_at: string;
-  notes: string | null;
-};
+type Client = components["schemas"]["ClientOut"];
+type Appointment = components["schemas"]["AppointmentOut"];
+type AppointmentCreate = components["schemas"]["AppointmentCreate"];
+type AppointmentUpdate = components["schemas"]["AppointmentUpdate"];
 
 const toDateTimeLocal = (iso: string) => {
   const date = new Date(iso);
@@ -67,7 +59,7 @@ export default function AppointmentsPage() {
     let cancelled = false;
     async function loadClients() {
       try {
-        const data = await api<Client[]>("/v1/clients");
+        const data = await api.get("/v1/clients");
         if (!cancelled) {
           setClients(data);
         }
@@ -89,7 +81,7 @@ export default function AppointmentsPage() {
       setAppointmentsLoading(true);
       setAppointmentsError(null);
       try {
-        const data = await api<Appointment[]>("/v1/appointments");
+        const data = await api.get("/v1/appointments");
         if (!cancelled) {
           setAppointments(data);
         }
@@ -148,15 +140,15 @@ export default function AppointmentsPage() {
 
     setCreating(true);
     try {
-      await api<Appointment>("/v1/appointments", {
-        method: "POST",
-        body: JSON.stringify({
+      await api.post(
+        "/v1/appointments",
+        {
           client_id: Number(createClientId),
           starts_at: startIso,
           ends_at: endIso,
-          notes: createNotes.trim() || null,
-        }),
-      });
+          notes: createNotes.trim() ? createNotes.trim() : null,
+        } satisfies AppointmentCreate,
+      );
       setCreateSuccess("Appointment scheduled.");
       resetCreateForm();
       setRefreshKey((value) => value + 1);
@@ -171,7 +163,7 @@ export default function AppointmentsPage() {
     const confirmed = window.confirm("Delete this appointment?");
     if (!confirmed) return;
     try {
-      await api(`/v1/appointments/${appointment.id}`, { method: "DELETE" });
+      await api.delete("/v1/appointments/{appointment_id}", { params: { appointment_id: appointment.id } });
       setRefreshKey((value) => value + 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete appointment.");
@@ -217,14 +209,15 @@ export default function AppointmentsPage() {
 
     setEditing(true);
     try {
-      await api<Appointment>(`/v1/appointments/${selectedAppointment.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      await api.patch(
+        "/v1/appointments/{appointment_id}",
+        {
           starts_at: startIso,
           ends_at: endIso,
-          notes: editNotes.trim() || null,
-        }),
-      });
+          notes: editNotes.trim() ? editNotes.trim() : null,
+        } satisfies AppointmentUpdate,
+        { params: { appointment_id: selectedAppointment.id } },
+      );
       setEditSuccess("Appointment updated.");
       setEditOpen(false);
       setRefreshKey((value) => value + 1);
