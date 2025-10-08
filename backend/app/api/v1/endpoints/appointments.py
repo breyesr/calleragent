@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import get_current_user, get_db
+from app.api.v1.deps import get_current_user, get_db
 from ..schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentUpdate
 from app.models.appointment import Appointment
 from app.models.client import Client
