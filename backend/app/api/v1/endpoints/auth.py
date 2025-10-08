@@ -1,12 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import get_current_user, get_db
 from ..schemas import Token, UserCreate, UserOut
-from ...core.config import settings
-from ...core.security import create_access_token, hash_password, verify_password
+from ...core.security import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, verify_password
 from ...models.user import User
 
 router = APIRouter()
@@ -39,8 +37,7 @@ async def _extract_login_payload(request: Request) -> LoginPayload:
 
 
 def _get_user_by_email(db: Session, email: str) -> User | None:
-    stmt = select(User).where(User.email == email.lower())
-    return db.execute(stmt).scalar_one_or_none()
+    return db.query(User).filter(User.email == email.lower()).first()
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -49,7 +46,7 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
-    user = User(email=payload.email.lower(), hashed_password=hash_password(payload.password))
+    user = User(email=payload.email.lower(), hashed_password=get_password_hash(payload.password))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -64,7 +61,7 @@ async def login_user(request: Request, db: Session = Depends(get_db)) -> Token:
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    access_token = create_access_token({"sub": str(user.id)}, settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token({"sub": user.email}, ACCESS_TOKEN_EXPIRE_MINUTES)
     return Token(access_token=access_token)
 
 
