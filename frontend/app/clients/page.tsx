@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
-import type { components } from "@/lib/api-types";
+import type { paths } from "@/lib/api-types";
 
-type Client = components["schemas"]["ClientOut"];
-type CreateClientBody = components["schemas"]["ClientCreate"];
+type CreateClientBody = paths["/v1/clients"]["post"]["requestBody"]["content"]["application/json"];
+type CreateClientResponse = paths["/v1/clients"]["post"]["responses"][201]["content"]["application/json"];
+type ClientsResponse = paths["/v1/clients"]["get"]["responses"][200]["content"]["application/json"];
+type Client = ClientsResponse[number];
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -41,14 +43,14 @@ export default function ClientsPage() {
       setLoading(true);
       setError(null);
       try {
-        const queryParam = debouncedQuery ? { q: debouncedQuery } : undefined;
-        const data = await api.get("/v1/clients", queryParam ? { query: queryParam } : undefined);
+        const searchParam = debouncedQuery ? `?${new URLSearchParams({ q: debouncedQuery }).toString()}` : "";
+        const data = await api<ClientsResponse>(`/v1/clients${searchParam}`);
         if (!cancelled) {
           setClients(data);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load clients");
+          setError(err instanceof Error ? err.message : String(err));
           setClients([]);
         }
       } finally {
@@ -77,13 +79,16 @@ export default function ClientsPage() {
 
     setSubmitting(true);
     try {
-      await api.post("/v1/clients", { name: formName.trim(), phone: formPhone.trim() } satisfies CreateClientBody);
+      await api<CreateClientResponse>("/v1/clients", {
+        method: "POST",
+        body: JSON.stringify({ name: formName.trim(), phone: formPhone.trim() } satisfies CreateClientBody),
+      });
       setFormSuccess("Client added successfully.");
       setFormName("");
       setFormPhone("");
       setRefreshKey((value) => value + 1);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to create client.");
+      setFormError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
