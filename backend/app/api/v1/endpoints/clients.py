@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..deps import get_current_user, get_db
+from app.api.v1.deps import get_current_user, get_db
 from ..schemas.client import ClientCreate, ClientOut, ClientUpdate
 from app.models.client import Client
 from app.models.user import User
