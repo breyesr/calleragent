@@ -35,6 +35,18 @@ export interface components {
     Message: {
       detail: string;
     };
+    UserCreate: {
+      email: string;
+      password: string;
+    };
+    UserOut: {
+      id: number;
+      email: string;
+    };
+    Token: {
+      access_token: string;
+      token_type: string;
+    };
   };
 }
 
@@ -199,6 +211,67 @@ export interface paths {
       responses: {
         204: {
           description: string;
+        };
+        default: {
+          content: {
+            "application/json": components["schemas"]["Message"];
+          };
+        };
+      };
+    };
+  };
+  "/v1/auth/register": {
+    post: {
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["UserCreate"];
+        };
+      };
+      responses: {
+        201: {
+          content: {
+            "application/json": components["schemas"]["UserOut"];
+          };
+        };
+        default: {
+          content: {
+            "application/json": components["schemas"]["Message"];
+          };
+        };
+      };
+    };
+  };
+  "/v1/auth/login": {
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            email: string;
+            password: string;
+          };
+        };
+      };
+      responses: {
+        200: {
+          content: {
+            "application/json": components["schemas"]["Token"];
+          };
+        };
+        default: {
+          content: {
+            "application/json": components["schemas"]["Message"];
+          };
+        };
+      };
+    };
+  };
+  "/v1/auth/me": {
+    get: {
+      responses: {
+        200: {
+          content: {
+            "application/json": components["schemas"]["UserOut"];
+          };
         };
         default: {
           content: {

@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import type { paths } from "@/lib/api-types";
+import { useToken } from "@/lib/useToken";
 
 type CreateClientBody = paths["/v1/clients"]["post"]["requestBody"]["content"]["application/json"];
 type CreateClientResponse = paths["/v1/clients"]["post"]["responses"][201]["content"]["application/json"];
@@ -27,6 +28,8 @@ export default function ClientsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { token } = useToken();
+  const isAuthenticated = Boolean(token);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -74,6 +77,11 @@ export default function ClientsPage() {
 
     if (!formName.trim() || !formPhone.trim()) {
       setFormError("Name and phone are required.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setFormError("Please log in to create clients.");
       return;
     }
 
@@ -176,11 +184,14 @@ export default function ClientsPage() {
           {formError ? <p className="text-sm text-red-400">{formError}</p> : null}
           {formSuccess ? <p className="text-sm text-emerald-400">{formSuccess}</p> : null}
 
-          <Button type="submit" loading={submitting} className="w-full md:w-auto">
-            Add client
+          <Button type="submit" loading={submitting} className="w-full md:w-auto" disabled={!isAuthenticated}>
+            {isAuthenticated ? "Add client" : "Login required"}
           </Button>
         </form>
       </div>
+      {!isAuthenticated ? (
+        <p className="text-xs text-neutral-500">Sign in to add or update clients.</p>
+      ) : null}
     </section>
   );
 }

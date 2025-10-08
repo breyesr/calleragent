@@ -8,6 +8,7 @@ import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import { api } from "@/lib/api-client";
 import type { paths } from "@/lib/api-types";
+import { useToken } from "@/lib/useToken";
 
 type ClientsResponse = paths["/v1/clients"]["get"]["responses"][200]["content"]["application/json"];
 type Client = ClientsResponse[number];
@@ -58,6 +59,8 @@ export default function AppointmentsPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const { token } = useToken();
+  const isAuthenticated = Boolean(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +145,11 @@ export default function AppointmentsPage() {
       return;
     }
 
+    if (!isAuthenticated) {
+      setCreateError("Please log in to schedule appointments.");
+      return;
+    }
+
     setCreating(true);
     try {
       await api<AppointmentCreateResponse>("/v1/appointments", {
@@ -164,6 +172,10 @@ export default function AppointmentsPage() {
   };
 
   const handleDelete = async (appointment: Appointment) => {
+    if (!isAuthenticated) {
+      alert("Please log in to delete appointments.");
+      return;
+    }
     const confirmed = window.confirm("Delete this appointment?");
     if (!confirmed) return;
     try {
@@ -175,6 +187,7 @@ export default function AppointmentsPage() {
   };
 
   const openEditModal = (appointment: Appointment) => {
+    if (!isAuthenticated) return;
     setSelectedAppointment(appointment);
     setEditStartsAt(toDateTimeLocal(appointment.starts_at));
     setEditEndsAt(toDateTimeLocal(appointment.ends_at));
@@ -187,6 +200,10 @@ export default function AppointmentsPage() {
   const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedAppointment) return;
+    if (!isAuthenticated) {
+      setEditError("Please log in to update appointments.");
+      return;
+    }
 
     setEditError(null);
     setEditSuccess(null);
@@ -277,14 +294,18 @@ export default function AppointmentsPage() {
                     {appointment.notes ? <span className="text-neutral-200">{appointment.notes}</span> : <span className="text-neutral-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="secondary" onClick={() => openEditModal(appointment)}>
-                        Edit
-                      </Button>
-                      <Button type="button" variant="ghost" onClick={() => handleDelete(appointment)}>
-                        Delete
-                      </Button>
-                    </div>
+                    {isAuthenticated ? (
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="secondary" onClick={() => openEditModal(appointment)}>
+                          Edit
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => handleDelete(appointment)}>
+                          Delete
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-neutral-500">Read only</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -342,11 +363,13 @@ export default function AppointmentsPage() {
           {createError ? <p className="text-sm text-red-400">{createError}</p> : null}
           {createSuccess ? <p className="text-sm text-emerald-400">{createSuccess}</p> : null}
 
-          <Button type="submit" loading={creating} className="w-full md:w-auto" disabled={clients.length === 0}>
-            Create appointment
+          <Button type="submit" loading={creating} className="w-full md:w-auto" disabled={!isAuthenticated || clients.length === 0}>
+            {isAuthenticated ? "Create appointment" : "Login required"}
           </Button>
         </form>
       </div>
+
+      {!isAuthenticated ? <p className="text-xs text-neutral-500">Sign in to schedule, edit, or delete appointments.</p> : null}
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit appointment">
         <form onSubmit={handleEditSubmit} className="space-y-3">
@@ -370,7 +393,7 @@ export default function AppointmentsPage() {
             <Button type="button" variant="ghost" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={editing}>
+            <Button type="submit" loading={editing} disabled={!isAuthenticated}>
               Save changes
             </Button>
           </div>
