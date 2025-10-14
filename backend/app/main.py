@@ -5,9 +5,14 @@ from .api.v1.routes import api_router
 
 app = FastAPI(title=settings.APP_NAME)
 
+allowed_origins = {
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+}
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in prod
+    allow_origins=list(allowed_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

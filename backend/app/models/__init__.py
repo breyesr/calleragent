@@ -1,6 +1,6 @@
-from .appointment import Appointment
-from .base import Base
+from .base import Base  # if present
+from .user import User  # if present
 from .client import Client
-from .user import User
+from .appointment import Appointment
 
 __all__ = ["Base", "User", "Client", "Appointment"]
