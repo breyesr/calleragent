@@ -1,33 +1,43 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+"use client";
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-    cache: "no-store",
-  });
+import axios from "axios";
 
-  const parseJson = async () => {
-    try {
-      return (await response.json()) as T;
-    } catch {
-      return null;
+import { clearToken, getToken } from "@/lib/auth";
+
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
+  withCredentials: false,
+});
+
+api.interceptors.request.use((config) => {
+  if (typeof window === "undefined") {
+    return config;
+  }
+  const token = getToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
-  };
+    return Promise.reject(error);
+  },
+);
 
-  if (!response.ok) {
-    const payload = await parseJson();
-    const detail = payload && typeof payload === "object" && "detail" in (payload as Record<string, unknown>) ? (payload as Record<string, unknown>).detail : null;
-    const message = detail ? String(detail) : `API error ${response.status}`;
-    throw new Error(message);
-  }
-
-  const data = await parseJson();
-  if (data === null) {
-    throw new Error("Invalid JSON payload received from API");
-  }
-  return data;
-}
+export default api;

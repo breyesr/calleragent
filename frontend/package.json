@@ -8,7 +8,8 @@
     "start": "next start -p 3002",
     "lint": "eslint .",
     "test": "vitest",
-    "gen:api": "openapi-typescript http://backend:8000/openapi.json -o lib/api-types.ts"
+    "gen:api": "openapi-typescript http://backend:8000/openapi.json -o lib/api-types.ts",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -17,7 +18,8 @@
     "zustand": "4.5.2",
     "react-hook-form": "7.52.0",
     "zod": "3.23.8",
-    "clsx": "2.1.1"
+    "clsx": "2.1.1",
+    "axios": "^1.6.8"
   },
   "devDependencies": {
     "@types/node": "20.11.30",

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import Modal from "@/components/Modal";
 import Select from "@/components/Select";
-import { api } from "@/lib/api-client";
+import api from "@/lib/api";
 import type { paths } from "@/lib/api-types";
 import { useToken } from "@/lib/useToken";
 
@@ -66,9 +67,9 @@ export default function AppointmentsPage() {
     let cancelled = false;
     async function loadClients() {
       try {
-        const data = await api<ClientsResponse>("/v1/clients");
+        const response = await api.get<ClientsResponse>("/v1/clients");
         if (!cancelled) {
-          setClients(data);
+          setClients(response.data);
         }
       } catch (err) {
         if (!cancelled) {
@@ -88,9 +89,9 @@ export default function AppointmentsPage() {
       setAppointmentsLoading(true);
       setAppointmentsError(null);
       try {
-        const data = await api<AppointmentsResponse>("/v1/appointments");
+        const response = await api.get<AppointmentsResponse>("/v1/appointments");
         if (!cancelled) {
-          setAppointments(data);
+          setAppointments(response.data);
         }
       } catch (err) {
         if (!cancelled) {
@@ -152,15 +153,12 @@ export default function AppointmentsPage() {
 
     setCreating(true);
     try {
-      await api<AppointmentCreateResponse>("/v1/appointments", {
-        method: "POST",
-        body: JSON.stringify({
-          client_id: Number(createClientId),
-          starts_at: startIso,
-          ends_at: endIso,
-          notes: createNotes.trim() ? createNotes.trim() : null,
-        } satisfies AppointmentCreateBody),
-      });
+      await api.post<AppointmentCreateResponse>("/v1/appointments", {
+        client_id: Number(createClientId),
+        starts_at: startIso,
+        ends_at: endIso,
+        notes: createNotes.trim() ? createNotes.trim() : null,
+      } satisfies AppointmentCreateBody);
       setCreateSuccess("Appointment scheduled.");
       resetCreateForm();
       setRefreshKey((value) => value + 1);
@@ -179,7 +177,7 @@ export default function AppointmentsPage() {
     const confirmed = window.confirm("Delete this appointment?");
     if (!confirmed) return;
     try {
-      await api<void>(`/v1/appointments/${appointment.id}`, { method: "DELETE" });
+      await api.delete(`/v1/appointments/${appointment.id}`);
       setRefreshKey((value) => value + 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
@@ -230,14 +228,11 @@ export default function AppointmentsPage() {
 
     setEditing(true);
     try {
-      await api<AppointmentUpdateResponse>(`/v1/appointments/${selectedAppointment.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          starts_at: startIso,
-          ends_at: endIso,
-          notes: editNotes.trim() ? editNotes.trim() : null,
-        } satisfies AppointmentUpdateBody),
-      });
+      await api.patch<AppointmentUpdateResponse>(`/v1/appointments/${selectedAppointment.id}`, {
+        starts_at: startIso,
+        ends_at: endIso,
+        notes: editNotes.trim() ? editNotes.trim() : null,
+      } satisfies AppointmentUpdateBody);
       setEditSuccess("Appointment updated.");
       setEditOpen(false);
       setRefreshKey((value) => value + 1);

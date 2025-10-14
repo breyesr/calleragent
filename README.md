@@ -18,12 +18,43 @@ Run `backend/scripts/smoke.sh` (after the stack is up) to verify the health endp
 
 ## Frontend ↔ Backend Wiring
 
-- The frontend reads `NEXT_PUBLIC_API_BASE_URL` (set to `http://localhost:8000`) to call the FastAPI service from the browser.
-- Docker Compose injects that environment variable into the frontend container and publishes the app on `3002:3000`, so your local browser connects at `http://localhost:3002`.
-- FastAPI CORS allows `http://localhost:3002` and `http://127.0.0.1:3002`, aligning with the UI origins during development.
+- The frontend reads `NEXT_PUBLIC_API_URL` to reach the FastAPI service. Update `frontend/.env.local` when switching environments.
+- Docker Compose publishes the frontend on `3002:3000`, so your browser hits `http://localhost:3002`.
+- FastAPI CORS allows `http://localhost:3002` and `http://127.0.0.1:3002`.
+
+## Environment Variables
+
+- `NEXT_PUBLIC_API_URL`: Base URL for frontend API calls (local default `http://localhost:8000`).
+- Backend loads `DATABASE_URL`, `SECRET_KEY`, and other values from `.env` / `infra/.env`.
+
 
 ## Authentication Workflow
 
+### cURL quickstart
+
+```bash
+export NEXT_PUBLIC_API_URL=http://localhost:8000
+
+curl -s -X POST "$NEXT_PUBLIC_API_URL/v1/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"secret123"}'
+
+TOKEN=$(curl -s -X POST "$NEXT_PUBLIC_API_URL/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"secret123"}' | jq -r .access_token)
+
+echo "TOKEN=$TOKEN"
+
+curl -s "$NEXT_PUBLIC_API_URL/v1/auth/me" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 - Register an operator once via `POST /v1/auth/register` (e.g. `curl -X POST http://localhost:8000/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"secretpass"}'`).
-- Sign in at <http://localhost:3002/login>; the frontend stores the returned JWT in `localStorage` under the `token` key.
+- Sign in at <http://localhost:3002/login>; the frontend stores the returned JWT in `localStorage` under the `access_token` key.
 - Protected actions (creating/editing/deleting clients or appointments) require the token; log out from the UI or by clearing the token manually.
+
+## Troubleshooting
+
+- **401 after login:** Clear the `access_token` from local storage and sign in again.
+- **Health badge shows “down”:** Ensure the backend container is running and `NEXT_PUBLIC_API_URL` points to it.
+- **Switching environments:** Update `frontend/.env.local` with the new `NEXT_PUBLIC_API_URL` and restart the dev server.

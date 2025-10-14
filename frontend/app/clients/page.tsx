@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { api } from "@/lib/api-client";
+import api from "@/lib/api";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import type { paths } from "@/lib/api-types";
@@ -47,9 +47,9 @@ export default function ClientsPage() {
       setError(null);
       try {
         const searchParam = debouncedQuery ? `?${new URLSearchParams({ q: debouncedQuery }).toString()}` : "";
-        const data = await api<ClientsResponse>(`/v1/clients${searchParam}`);
+        const response = await api.get<ClientsResponse>(`/v1/clients${searchParam}`);
         if (!cancelled) {
-          setClients(data);
+          setClients(response.data);
         }
       } catch (err) {
         if (!cancelled) {
@@ -87,10 +87,10 @@ export default function ClientsPage() {
 
     setSubmitting(true);
     try {
-      await api<CreateClientResponse>("/v1/clients", {
-        method: "POST",
-        body: JSON.stringify({ name: formName.trim(), phone: formPhone.trim() } satisfies CreateClientBody),
-      });
+      await api.post<CreateClientResponse>("/v1/clients", {
+        name: formName.trim(),
+        phone: formPhone.trim(),
+      } satisfies CreateClientBody);
       setFormSuccess("Client added successfully.");
       setFormName("");
       setFormPhone("");
