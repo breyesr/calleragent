@@ -6,7 +6,9 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start -p 3002",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest",
+    "gen:api": "openapi-typescript http://backend:8000/openapi.json -o lib/api-types.ts"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -26,6 +28,8 @@
     "eslint-config-next": "14.2.5",
     "postcss": "8.4.49",
     "tailwindcss": "3.4.12",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "vitest": "1.6.0",
+    "openapi-typescript": "6.7.1"
   }
 }

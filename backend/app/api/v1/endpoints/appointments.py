@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import get_db
+from app.api.v1.deps import get_current_user, get_db
 from ..schemas.appointment import AppointmentCreate, AppointmentOut, AppointmentUpdate
-from ...models import Appointment, Client
+from app.models.appointment import Appointment
+from app.models.client import Client
+from app.models.user import User
 
 router = APIRouter()
 
@@ -30,7 +32,11 @@ def list_appointments(
 
 
 @router.post("", response_model=AppointmentOut, status_code=status.HTTP_201_CREATED)
-def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db)) -> AppointmentOut:
+def create_appointment(
+    payload: AppointmentCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> AppointmentOut:
     _ensure_client_exists(db, payload.client_id)
     _validate_time_range(payload.starts_at, payload.ends_at)
 
@@ -42,7 +48,12 @@ def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db)
 
 
 @router.patch("/{appointment_id}", response_model=AppointmentOut)
-def update_appointment(appointment_id: int, payload: AppointmentUpdate, db: Session = Depends(get_db)) -> AppointmentOut:
+def update_appointment(
+    appointment_id: int,
+    payload: AppointmentUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> AppointmentOut:
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
@@ -65,7 +76,11 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdate, db: Sess
 
 
 @router.delete("/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_appointment(appointment_id: int, db: Session = Depends(get_db)) -> None:
+def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> None:
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
