@@ -21,8 +21,8 @@ api.interceptors.request.use((config: AxiosRequestConfig) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
+  (response: any) => response,
+  (error: AxiosError<any>) => {
     const status = error.response?.status ?? 0;
     if (status === 401 && typeof window !== "undefined") {
       try { localStorage.removeItem("access_token"); } catch {}
