@@ -25,3 +25,5 @@ A coordinated release that finalizes JWT authentication across the FastAPI backe
 - Backend: `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`, health check at `/healthz`, migrations applied.
 - Frontend: `npm --prefix frontend run dev`, manual auth flow (register → login → dashboard) confirmed.
 - Curl smoke tests for `/v1/auth/register`, `/v1/auth/login`, and `/v1/auth/me` validated expected responses.
+
+- [x] 7) Redis + Celery tasks
