@@ -1,41 +1,23 @@
-# Celery Background Tasks Runbook
+# Celery Background Tasks
 
 ## Services
-- **redis** – broker + result backend (`redis://redis:6379/0`)
-- **worker** – Celery worker (`celery -A app.celery_app.celery worker`)
-- **beat** – Celery beat scheduler (`celery -A app.celery_app.celery beat`)
+- **backend**: FastAPI API exposing task endpoints
+- **redis**: message broker + result backend (`REDIS_URL`)
+- **worker**: Celery worker processing queued jobs
+- **beat**: Celery beat scheduler (optional)
 
 ## Environment
-Set `REDIS_URL` (default `redis://redis:6379/0`) in backend configuration or `.env`.
+Set `REDIS_URL` (default `redis://redis:6379/0`) in `.env` or backend config; frontend/env can reuse the same value.
 
-## Running locally
+## Local run sequence
 ```bash
-# build backend image with Celery deps
 docker compose --env-file infra/.env -f infra/docker-compose.yml build backend
-
-# start API, worker, and beat
-docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend worker beat
-
-# inspect containers
-docker compose --env-file infra/.env -f infra/docker-compose.yml ps
+docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend redis worker beat
+docker compose --env-file infra/.env -f infra/docker-compose.yml logs --tail=120 worker
+bash scripts/smoke_tasks.sh
 ```
 
-## Enqueueing tasks
-```bash
-# ping task
-curl -s -X POST http://localhost:8000/v1/tasks/ping | jq .
-
-# slow addition
-curl -s -X POST "http://localhost:8000/v1/tasks/slow-add?a=2&b=3&delay=1" | jq .
-
-# fetch result (replace TASK_ID)
-curl -s http://localhost:8000/v1/tasks/result/TASK_ID | jq .
-```
-
-## Checking results
-```bash
-# tail worker logs for progress
- docker compose --env-file infra/.env -f infra/docker-compose.yml logs --tail=80 worker
-```
-
-`SUCCESS` status with `"pong"` or numeric results indicates completion.
+## Troubleshooting
+- **Worker cannot reach broker**: verify `REDIS_URL` and that the redis container is healthy.
+- **No results**: ensure `CELERY_RESULT_BACKEND` matches redis and worker logs show task completion.
+- **OpenAPI missing /v1/tasks**: rerun migrations and confirm routes include the tasks router.

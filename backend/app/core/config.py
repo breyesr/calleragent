@@ -12,4 +12,12 @@ class Settings(BaseModel):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
+    @property
+    def CELERY_BROKER_URL(self) -> str:
+        return self.REDIS_URL
+
+    @property
+    def CELERY_RESULT_BACKEND(self) -> str:
+        return self.REDIS_URL
+
 settings = Settings()
