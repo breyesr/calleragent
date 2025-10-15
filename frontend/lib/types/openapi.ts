@@ -37,6 +37,18 @@ export interface paths {
     /** Update Appointment */
     patch: operations["update_appointment_v1_appointments__appointment_id__patch"];
   };
+  "/v1/tasks/ping": {
+    /** Enqueue Ping */
+    post: operations["enqueue_ping_v1_tasks_ping_post"];
+  };
+  "/v1/tasks/slow-add": {
+    /** Enqueue Slow Add */
+    post: operations["enqueue_slow_add_v1_tasks_slow_add_post"];
+  };
+  "/v1/tasks/result/{task_id}": {
+    /** Get Result */
+    get: operations["get_result_v1_tasks_result__task_id__get"];
+  };
   "/v1/auth/register": {
     /** Register User */
     post: operations["register_user_v1_auth_register_post"];
@@ -383,6 +395,63 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["AppointmentOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Enqueue Ping */
+  enqueue_ping_v1_tasks_ping_post: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+    };
+  };
+  /** Enqueue Slow Add */
+  enqueue_slow_add_v1_tasks_slow_add_post: {
+    parameters: {
+      query: {
+        a: number;
+        b: number;
+        delay?: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Get Result */
+  get_result_v1_tasks_result__task_id__get: {
+    parameters: {
+      path: {
+        task_id: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": unknown;
         };
       };
       /** @description Validation Error */
