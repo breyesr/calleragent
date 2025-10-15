@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { API_BASE, api } from "./api";
+import api, { API_BASE } from "./api";
 
 const originalFetch = global.fetch;
 

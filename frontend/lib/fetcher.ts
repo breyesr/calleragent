@@ -1,7 +1,5 @@
-import { api } from "./api";
-
-export function fetcher<T>(path: string): Promise<T> {
-  return api<T>(path);
+import api from "./api";
+export default async function fetcher(url: string) {
+  const { data } = await api.get(url);
+  return data;
 }
-
-export default fetcher;
