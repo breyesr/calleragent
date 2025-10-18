@@ -1,33 +1,36 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+"use client";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-    cache: "no-store",
-  });
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-  const parseJson = async () => {
-    try {
-      return (await response.json()) as T;
-    } catch {
-      return null;
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false
+});
+
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      config.headers = config.headers ?? {};
+      (config.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
     }
-  };
-
-  if (!response.ok) {
-    const payload = await parseJson();
-    const detail = payload && typeof payload === "object" && "detail" in (payload as Record<string, unknown>) ? (payload as Record<string, unknown>).detail : null;
-    const message = detail ? String(detail) : `API error ${response.status}`;
-    throw new Error(message);
   }
+  return config;
+});
 
-  const data = await parseJson();
-  if (data === null) {
-    throw new Error("Invalid JSON payload received from API");
+api.interceptors.response.use(
+  (response: import("axios").AxiosResponse) => response,
+  (error: AxiosError) => {
+    const status = error.response?.status ?? 0;
+    if (status === 401 && typeof window !== "undefined") {
+      try { localStorage.removeItem("access_token"); } catch {}
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
   }
-  return data;
-}
+);
+
+export { api };
+export default api;

@@ -53,6 +53,30 @@ services:
     ports:
       - "${API_PORT}:8000"
 
+  worker:
+    image: agentcaller-backend
+    command: celery -A app.celery_app.celery_app worker --loglevel=INFO --concurrency=2 -Q default
+    depends_on:
+      - backend
+      - redis
+    env_file:
+      - ./.env
+    volumes:
+      - ../backend:/app
+    working_dir: /app
+
+  beat:
+    image: agentcaller-backend
+    command: celery -A app.celery_app.celery_app beat --loglevel=INFO
+    depends_on:
+      - backend
+      - redis
+    env_file:
+      - ./.env
+    volumes:
+      - ../backend:/app
+    working_dir: /app
+
   frontend:
     build:
       context: ../frontend
