@@ -27,3 +27,5 @@ A coordinated release that finalizes JWT authentication across the FastAPI backe
 - Curl smoke tests for `/v1/auth/register`, `/v1/auth/login`, and `/v1/auth/me` validated expected responses.
 
 - [x] 7) Redis + Celery tasks
+
+- [x] 8) Google Calendar (read-only MVP – stub)
