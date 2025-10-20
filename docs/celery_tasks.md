@@ -17,6 +17,21 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml logs --tail=120
 bash scripts/smoke_tasks.sh
 ```
 
+## Quick verify (slow_add)
+**Terminal 1**
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.yml logs -f worker
+```
+
+**Terminal 2**
+```bash
+bash scripts/smoke_slow_add.sh
+```
+
+Expected output: the final JSON payload includes `"result": 5`.
+
+If the worker log never shows `Task app.tasks.demo.slow_add[...] received`, restart the worker container and confirm `celery -A app.celery_app inspect registered` lists the demo tasks.
+
 ## Troubleshooting
 - **Worker cannot reach broker**: verify `REDIS_URL` and that the redis container is healthy.
 - **No results**: ensure `CELERY_RESULT_BACKEND` matches redis and worker logs show task completion.
