@@ -49,6 +49,10 @@ export interface paths {
     /** Get Result */
     get: operations["get_result_v1_tasks_result__task_id__get"];
   };
+  "/v1/calendar/events": {
+    /** List Events */
+    get: operations["list_events_v1_calendar_events_get"];
+  };
   "/v1/auth/register": {
     /** Register User */
     post: operations["register_user_v1_auth_register_post"];
@@ -136,6 +140,30 @@ export interface components {
       name?: string | null;
       /** Phone */
       phone?: string | null;
+    };
+    /** Event */
+    Event: {
+      /** Id */
+      id: string;
+      /** Summary */
+      summary: string;
+      /**
+       * Start
+       * Format: date-time
+       */
+      start: string;
+      /**
+       * End
+       * Format: date-time
+       */
+      end: string;
+      /** Location */
+      location: string;
+    };
+    /** EventsResponse */
+    EventsResponse: {
+      /** Items */
+      items: components["schemas"]["Event"][];
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -452,6 +480,28 @@ export interface operations {
       200: {
         content: {
           "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** List Events */
+  list_events_v1_calendar_events_get: {
+    parameters: {
+      query?: {
+        max_results?: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["EventsResponse"];
         };
       };
       /** @description Validation Error */
