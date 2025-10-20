@@ -16,3 +16,7 @@ dist/
 build/
 coverage/
 .cache/
+
+# Build/cache
+frontend/tmp/
+backend/celerybeat-schedule
