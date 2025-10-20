@@ -13,5 +13,6 @@ celery_app.conf.update(
     accept_content=["json"],
     result_serializer="json",
 )
+celery_app.conf.task_default_queue = "default"
 
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.autodiscover_tasks(["app"], related_name="tasks")
