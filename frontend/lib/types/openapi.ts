@@ -65,6 +65,10 @@ export interface paths {
     /** Read Current User */
     get: operations["read_current_user_v1_auth_me_get"];
   };
+  "/v1/messaging/whatsapp/send": {
+    /** Send Whatsapp Message */
+    post: operations["send_whatsapp_message_v1_messaging_whatsapp_send_post"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -208,6 +212,13 @@ export interface components {
       msg: string;
       /** Error Type */
       type: string;
+    };
+    /** WhatsAppSendRequest */
+    WhatsAppSendRequest: {
+      /** To */
+      to: string;
+      /** Text */
+      text: string;
     };
   };
   responses: never;
@@ -552,6 +563,28 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["UserOut"];
+        };
+      };
+    };
+  };
+  /** Send Whatsapp Message */
+  send_whatsapp_message_v1_messaging_whatsapp_send_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WhatsAppSendRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };

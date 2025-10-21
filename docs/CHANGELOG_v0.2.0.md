@@ -29,3 +29,4 @@ A coordinated release that finalizes JWT authentication across the FastAPI backe
 - [x] 7) Redis + Celery tasks
 
 - [x] 8) Google Calendar (read-only MVP – stub)
+- [x] 9) WhatsApp send stub ✅

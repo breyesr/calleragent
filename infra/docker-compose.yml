@@ -55,7 +55,7 @@ services:
 
   worker:
     image: agentcaller-backend
-    command: celery -A app.celery_app.celery_app worker --loglevel=INFO --concurrency=2 -Q celery
+    command: celery -A app.celery_app.celery_app worker --loglevel=INFO --concurrency=2 -Q default,celery
     depends_on:
       - backend
       - redis
