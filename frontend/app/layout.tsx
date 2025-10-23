@@ -1,7 +1,9 @@
 import "./../styles/globals.css";
 import type { ReactNode } from "react";
 
-import HeaderNav from "@/components/HeaderNav";
+import dynamic from "next/dynamic";
+
+const HeaderNav = dynamic(() => import("@/components/HeaderNav"), { ssr: false });
 
 export const metadata = { title: "AgentCaller", description: "Appointments automation" };
 
