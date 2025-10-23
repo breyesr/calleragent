@@ -17,6 +17,7 @@ export function HeaderNav() {
   return (
     <nav className="text-sm opacity-80 flex items-center gap-4">
       <a className="hover:underline" href="/dashboard">Dashboard</a>
+      <a className="hover:underline" href="/dashboard/whatsapp-test">WhatsApp Test</a>
       <a className="hover:underline" href="/clients">Clients</a>
       <a className="hover:underline" href="/appointments">Appointments</a>
       <a className="hover:underline" href="/settings">Settings</a>
