@@ -1,0 +1,26 @@
+name: WhatsApp UI Guard
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "scripts/guard_whatsapp_ui.sh"
+      - "package.json"
+      - ".github/workflows/whatsapp-guard.yml"
+      - "docs/**"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install frontend deps
+        run: npm --prefix frontend ci
+
+      - name: Lint frontend
+        run: npm --prefix frontend run lint
+
+      - name: Verify WhatsApp UI assets
+        run: npm run ci:guard:whatsapp
