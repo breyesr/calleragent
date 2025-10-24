@@ -60,7 +60,13 @@ export default function AppointmentsPage() {
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const { token } = useToken();
+  const [authResolved, setAuthResolved] = useState(false);
   const isAuthenticated = Boolean(token);
+  const canMutate = authResolved && isAuthenticated;
+
+  useEffect(() => {
+    setAuthResolved(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,8 +151,8 @@ export default function AppointmentsPage() {
       return;
     }
 
-    if (!isAuthenticated) {
-      setCreateError("Please log in to schedule appointments.");
+    if (!canMutate) {
+      setCreateError(authResolved ? "Please log in to schedule appointments." : "Authenticating…");
       return;
     }
 
@@ -172,8 +178,8 @@ export default function AppointmentsPage() {
   };
 
   const handleDelete = async (appointment: Appointment) => {
-    if (!isAuthenticated) {
-      alert("Please log in to delete appointments.");
+    if (!canMutate) {
+      alert(authResolved ? "Please log in to delete appointments." : "Authenticating…");
       return;
     }
     const confirmed = window.confirm("Delete this appointment?");
@@ -187,7 +193,7 @@ export default function AppointmentsPage() {
   };
 
   const openEditModal = (appointment: Appointment) => {
-    if (!isAuthenticated) return;
+    if (!canMutate) return;
     setSelectedAppointment(appointment);
     setEditStartsAt(toDateTimeLocal(appointment.starts_at));
     setEditEndsAt(toDateTimeLocal(appointment.ends_at));
@@ -200,8 +206,8 @@ export default function AppointmentsPage() {
   const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedAppointment) return;
-    if (!isAuthenticated) {
-      setEditError("Please log in to update appointments.");
+    if (!canMutate) {
+      setEditError(authResolved ? "Please log in to update appointments." : "Authenticating…");
       return;
     }
 
@@ -294,17 +300,21 @@ export default function AppointmentsPage() {
                     {appointment.notes ? <span className="text-neutral-200">{appointment.notes}</span> : <span className="text-neutral-500">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {isAuthenticated ? (
-                      <div className="flex justify-end gap-2">
-                        <Button type="button" variant="secondary" onClick={() => openEditModal(appointment)}>
-                          Edit
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={() => handleDelete(appointment)}>
-                          Delete
-                        </Button>
-                      </div>
+                    {authResolved ? (
+                      canMutate ? (
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="secondary" onClick={() => openEditModal(appointment)}>
+                            Edit
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={() => handleDelete(appointment)}>
+                            Delete
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-neutral-500">Read only</span>
+                      )
                     ) : (
-                      <span className="text-xs text-neutral-500">Read only</span>
+                      <span className="text-xs text-neutral-500">Loading…</span>
                     )}
                   </td>
                 </tr>
@@ -314,7 +324,7 @@ export default function AppointmentsPage() {
         </table>
       </div>
     );
-  }, [appointments, appointmentsError, appointmentsLoading, clients]);
+  }, [appointments, appointmentsError, appointmentsLoading, clients, authResolved, canMutate]);
 
   return (
     <section className="space-y-6">
@@ -363,13 +373,17 @@ export default function AppointmentsPage() {
           {createError ? <p className="text-sm text-red-400">{createError}</p> : null}
           {createSuccess ? <p className="text-sm text-emerald-400">{createSuccess}</p> : null}
 
-          <Button type="submit" loading={creating} className="w-full md:w-auto" disabled={!isAuthenticated || clients.length === 0}>
-            {isAuthenticated ? "Create appointment" : "Login required"}
+          <Button type="submit" loading={creating} className="w-full md:w-auto" disabled={!canMutate || clients.length === 0}>
+            {authResolved ? (canMutate ? "Create appointment" : "Login required") : "Loading…"}
           </Button>
         </form>
       </div>
 
-      {!isAuthenticated ? <p className="text-xs text-neutral-500">Sign in to schedule, edit, or delete appointments.</p> : null}
+      {!authResolved ? (
+        <p className="text-xs text-neutral-500">Loading…</p>
+      ) : !canMutate ? (
+        <p className="text-xs text-neutral-500">Sign in to schedule, edit, or delete appointments.</p>
+      ) : null}
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit appointment">
         <form onSubmit={handleEditSubmit} className="space-y-3">
@@ -393,7 +407,7 @@ export default function AppointmentsPage() {
             <Button type="button" variant="ghost" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={editing} disabled={!isAuthenticated}>
+            <Button type="submit" loading={editing} disabled={!canMutate}>
               Save changes
             </Button>
           </div>

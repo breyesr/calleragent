@@ -11,6 +11,7 @@ __pycache__/
 .env.*
 !/.env
 !/infra/.env
+!backend/.env.example
 .DS_Store
 dist/
 build/
