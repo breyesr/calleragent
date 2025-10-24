@@ -14,5 +14,10 @@ celery_app.conf.update(
     result_serializer="json",
 )
 celery_app.conf.task_default_queue = "default"
+celery_app.conf.update(
+    imports=tuple(
+        {*(celery_app.conf.get("imports", ()) or ()), "app.tasks.messaging"}
+    )
+)
 
 celery_app.autodiscover_tasks(["app"], related_name="tasks")
