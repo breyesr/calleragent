@@ -1,0 +1,7 @@
+{
+  "name": "agentcaller-monorepo",
+  "private": true,
+  "scripts": {
+    "ci:guard:whatsapp": "bash scripts/guard_whatsapp_ui.sh"
+  }
+}
