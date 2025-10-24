@@ -9,6 +9,7 @@ class Settings(BaseModel):
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/agentcaller")
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    MESSAGING_PROVIDER: str = os.getenv("MESSAGING_PROVIDER", "stub_whatsapp")
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 

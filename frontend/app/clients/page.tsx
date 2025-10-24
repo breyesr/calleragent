@@ -29,7 +29,13 @@ export default function ClientsPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { token } = useToken();
+  const [authResolved, setAuthResolved] = useState(false);
   const isAuthenticated = Boolean(token);
+  const canMutate = authResolved && isAuthenticated;
+
+  useEffect(() => {
+    setAuthResolved(true);
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -80,8 +86,8 @@ export default function ClientsPage() {
       return;
     }
 
-    if (!isAuthenticated) {
-      setFormError("Please log in to create clients.");
+    if (!canMutate) {
+      setFormError(authResolved ? "Please log in to create clients." : "Authenticating…");
       return;
     }
 
@@ -184,12 +190,14 @@ export default function ClientsPage() {
           {formError ? <p className="text-sm text-red-400">{formError}</p> : null}
           {formSuccess ? <p className="text-sm text-emerald-400">{formSuccess}</p> : null}
 
-          <Button type="submit" loading={submitting} className="w-full md:w-auto" disabled={!isAuthenticated}>
-            {isAuthenticated ? "Add client" : "Login required"}
+          <Button type="submit" loading={submitting} className="w-full md:w-auto" disabled={!canMutate}>
+            {authResolved ? (canMutate ? "Add client" : "Login required") : "Loading…"}
           </Button>
         </form>
       </div>
-      {!isAuthenticated ? (
+      {!authResolved ? (
+        <p className="text-xs text-neutral-500">Loading…</p>
+      ) : !canMutate ? (
         <p className="text-xs text-neutral-500">Sign in to add or update clients.</p>
       ) : null}
     </section>

@@ -1,5 +1,7 @@
 # CHANGELOG – v0.2.0-auth-ready
 
+> Latest updates for the messaging stack are tracked in `CHANGELOG_v0.3.x.md` (v0.3.3 and newer).
+
 ## Overview
 A coordinated release that finalizes JWT authentication across the FastAPI backend and introduces an environment-driven axios client with guarded routes in the Next.js frontend. This version stabilizes dependencies, trims legacy imports, and documents the full auth lifecycle for local and remote environments.
 
