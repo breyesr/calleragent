@@ -2,6 +2,8 @@ from celery import Celery
 
 from app.core.config import settings
 
+import app.tasks.messaging  # noqa: F401 ensures messaging tasks register
+
 celery_app = Celery(
     "agentcaller",
     broker=settings.CELERY_BROKER_URL,
