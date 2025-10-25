@@ -19,6 +19,11 @@ export function HeaderNav() {
       <a className="hover:underline" href="/dashboard">Dashboard</a>
       <a className="hover:underline" href="/clients">Clients</a>
       <a className="hover:underline" href="/appointments">Appointments</a>
+      {isAuthenticated ? (
+        <a className="hover:underline" href="/dashboard/whatsapp-test">
+          WhatsApp Test
+        </a>
+      ) : null}
       <a className="hover:underline" href="/settings">Settings</a>
       {isAuthenticated ? (
         <button type="button" onClick={handleLogout} className="text-neutral-300 hover:underline focus:outline-none">
