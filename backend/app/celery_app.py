@@ -9,10 +9,11 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    task_serializer="json",
+    imports=("app.tasks.demo", "app.tasks.messaging"),
+    task_default_queue="default",
     accept_content=["json"],
+    task_serializer="json",
     result_serializer="json",
 )
-celery_app.conf.task_default_queue = "default"
 
-celery_app.autodiscover_tasks(["app"], related_name="tasks")
+celery_app.autodiscover_tasks(["app"])
