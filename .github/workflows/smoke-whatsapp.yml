@@ -1,0 +1,51 @@
+name: WhatsApp Stub Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Start backend stack
+        run: |
+          docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend worker redis
+
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sS http://localhost:8000/healthz | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend healthz never returned ok" >&2
+          exit 1
+
+      - name: Run WhatsApp smoke script
+        run: |
+          TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"correo@pruebas.com","password":"correo"}' | jq -r '.access_token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Failed to obtain JWT access token" >&2
+            exit 1
+          fi
+          API_TOKEN="$TOKEN" bash scripts/smoke_whatsapp.sh
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose --env-file infra/.env -f infra/docker-compose.yml logs backend worker | tail -n 200
