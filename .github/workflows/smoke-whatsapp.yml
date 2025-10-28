@@ -45,6 +45,16 @@ jobs:
           echo "Backend healthz never returned ok" >&2
           exit 1
 
+      - name: Run migrations
+        run: |
+          docker compose --env-file infra/.env -f infra/docker-compose.yml exec -T backend alembic upgrade head
+
+      - name: Ensure test user exists
+        run: |
+          curl -s -X POST http://localhost:8000/v1/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"correo@pruebas.com","password":"correo"}' || true
+
       - name: Run WhatsApp smoke script
         run: |
           TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login \
