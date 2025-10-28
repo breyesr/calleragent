@@ -143,6 +143,7 @@ export default function ClientsPage() {
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -151,6 +152,11 @@ export default function ClientsPage() {
                 <td className="px-3 py-2 text-neutral-400">{client.id}</td>
                 <td className="px-3 py-2">{client.name}</td>
                 <td className="px-3 py-2">{client.phone}</td>
+                <td className="px-3 py-2">
+                  <a className="text-sm text-blue-400 hover:underline" href={`/clients/${client.id}/edit`}>
+                    Edit
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>
