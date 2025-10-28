@@ -26,9 +26,13 @@ jobs:
           ls -la backend || true
           cat infra/docker-compose.yml || true
 
+      - name: Build backend & worker images
+        run: |
+          docker compose --env-file infra/.env -f infra/docker-compose.yml build backend worker
+
       - name: Start backend stack
         run: |
-          docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend worker redis
+          docker compose --env-file infra/.env -f infra/docker-compose.yml up -d db redis backend worker
 
       - name: Wait for backend health
         run: |
