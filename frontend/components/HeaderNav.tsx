@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 
 import { useToken } from "@/lib/useToken";
 
+const BASE_LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/clients", label: "Clients" },
+  { href: "/appointments", label: "Appointments" },
+  { href: "/settings", label: "Settings" },
+];
+
+const AUTHENTICATED_LINKS = [{ href: "/dashboard/whatsapp-test", label: "WhatsApp Test" }];
+
 export function HeaderNav() {
   const router = useRouter();
   const { token, clearToken } = useToken();
@@ -31,15 +40,18 @@ export function HeaderNav() {
 
   return (
     <nav className="text-sm opacity-80 flex items-center gap-4">
-      <a className="hover:underline" href="/dashboard">Dashboard</a>
-      <a className="hover:underline" href="/clients">Clients</a>
-      <a className="hover:underline" href="/appointments">Appointments</a>
-      {isAuthenticated ? (
-        <a className="hover:underline" href="/dashboard/whatsapp-test">
-          WhatsApp Test
+      {BASE_LINKS.map((link) => (
+        <a key={link.href} className="hover:underline" href={link.href}>
+          {link.label}
         </a>
-      ) : null}
-      <a className="hover:underline" href="/settings">Settings</a>
+      ))}
+      {isAuthenticated
+        ? AUTHENTICATED_LINKS.map((link) => (
+            <a key={link.href} className="hover:underline" href={link.href}>
+              {link.label}
+            </a>
+          ))
+        : null}
       {isAuthenticated ? (
         <button type="button" onClick={handleLogout} className="text-neutral-300 hover:underline focus:outline-none">
           Logout
