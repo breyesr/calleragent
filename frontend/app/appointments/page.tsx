@@ -61,6 +61,11 @@ export default function AppointmentsPage() {
   const [editNotes, setEditNotes] = useState("");
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +113,14 @@ export default function AppointmentsPage() {
       cancelled = true;
     };
   }, [refreshKey]);
+
+  if (!mounted) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Loading…</p>
+      </section>
+    );
+  }
 
   const resetCreateForm = () => {
     setCreateClientId("");

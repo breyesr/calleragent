@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useToken } from "@/lib/useToken";
@@ -8,6 +9,15 @@ export function HeaderNav() {
   const router = useRouter();
   const { token, clearToken } = useToken();
   const isAuthenticated = Boolean(token);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <nav aria-hidden="true" className="h-6" />;
+  }
 
   const handleLogout = () => {
     clearToken();

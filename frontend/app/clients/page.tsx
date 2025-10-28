@@ -30,6 +30,11 @@ export default function ClientsPage() {
   const [submitting, setSubmitting] = useState(false);
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -138,6 +143,16 @@ export default function ClientsPage() {
       </div>
     );
   }, [clients, error, loading]);
+
+  if (!mounted) {
+    return (
+      <section className="space-y-6">
+        <div className="card">
+          <p className="py-6 text-sm text-neutral-400">Loading…</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">
