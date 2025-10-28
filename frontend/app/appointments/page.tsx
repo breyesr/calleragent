@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -59,6 +60,7 @@ export default function AppointmentsPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const router = useRouter();
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
   const [mounted, setMounted] = useState(false);
@@ -68,8 +70,20 @@ export default function AppointmentsPage() {
   }, []);
 
   useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, mounted, router]);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadClients() {
+      if (!isAuthenticated) {
+        setClients([]);
+        setClientsError(null);
+        return;
+      }
+
       try {
         const data = await api<ClientsResponse>("/v1/clients");
         if (!cancelled) {
@@ -85,11 +99,18 @@ export default function AppointmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadAppointments() {
+      if (!isAuthenticated) {
+        setAppointments([]);
+        setAppointmentsError(null);
+        setAppointmentsLoading(false);
+        return;
+      }
+
       setAppointmentsLoading(true);
       setAppointmentsError(null);
       try {
@@ -112,12 +133,20 @@ export default function AppointmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [isAuthenticated, refreshKey]);
 
   if (!mounted) {
     return (
       <section className="card">
         <p className="py-6 text-sm text-neutral-400">Loading…</p>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Redirecting…</p>
       </section>
     );
   }

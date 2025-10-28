@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
@@ -28,6 +29,7 @@ export default function ClientsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
   const [mounted, setMounted] = useState(false);
@@ -35,6 +37,12 @@ export default function ClientsPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, mounted, router]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -48,6 +56,13 @@ export default function ClientsPage() {
     let cancelled = false;
 
     async function load() {
+      if (!isAuthenticated) {
+        setClients([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
@@ -73,7 +88,7 @@ export default function ClientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, refreshKey]);
+  }, [debouncedQuery, isAuthenticated, refreshKey]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,6 +165,14 @@ export default function ClientsPage() {
         <div className="card">
           <p className="py-6 text-sm text-neutral-400">Loading…</p>
         </div>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Redirecting…</p>
       </section>
     );
   }

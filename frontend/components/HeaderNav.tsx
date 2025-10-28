@@ -19,7 +19,12 @@ export function HeaderNav() {
     return <nav aria-hidden="true" className="h-6" />;
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/session/logout", { method: "POST" });
+    } catch {
+      // ignore network errors during logout; local token will still be cleared
+    }
     clearToken();
     router.push("/login");
   };
