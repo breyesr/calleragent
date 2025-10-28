@@ -35,7 +35,48 @@ const toIsoString = (value: string) => {
   return date.toISOString();
 };
 
+type AppointmentsInnerProps = {
+  token: string;
+};
+
 export default function AppointmentsPage() {
+  const router = useRouter();
+  const { token } = useToken();
+  const isAuthenticated = Boolean(token);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, mounted, router]);
+
+  if (!mounted) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Loading…</p>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated || !token) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Redirecting…</p>
+      </section>
+    );
+  }
+
+  return <AppointmentsInner token={token} />;
+}
+
+function AppointmentsInner({ token }: AppointmentsInnerProps) {
+  const isAuthenticated = Boolean(token);
+
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsError, setClientsError] = useState<string | null>(null);
 
@@ -60,20 +101,6 @@ export default function AppointmentsPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  const router = useRouter();
-  const { token } = useToken();
-  const isAuthenticated = Boolean(token);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && !isAuthenticated) {
-      router.replace("/login");
-    }
-  }, [isAuthenticated, mounted, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,22 +161,6 @@ export default function AppointmentsPage() {
       cancelled = true;
     };
   }, [isAuthenticated, refreshKey]);
-
-  if (!mounted) {
-    return (
-      <section className="card">
-        <p className="py-6 text-sm text-neutral-400">Loading…</p>
-      </section>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <section className="card">
-        <p className="py-6 text-sm text-neutral-400">Redirecting…</p>
-      </section>
-    );
-  }
 
   const resetCreateForm = () => {
     setCreateClientId("");
