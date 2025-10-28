@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
@@ -28,8 +29,20 @@ export default function ClientsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, mounted, router]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -43,6 +56,13 @@ export default function ClientsPage() {
     let cancelled = false;
 
     async function load() {
+      if (!isAuthenticated) {
+        setClients([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
@@ -68,7 +88,7 @@ export default function ClientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, refreshKey]);
+  }, [debouncedQuery, isAuthenticated, refreshKey]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -123,6 +143,7 @@ export default function ClientsPage() {
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -131,6 +152,11 @@ export default function ClientsPage() {
                 <td className="px-3 py-2 text-neutral-400">{client.id}</td>
                 <td className="px-3 py-2">{client.name}</td>
                 <td className="px-3 py-2">{client.phone}</td>
+                <td className="px-3 py-2">
+                  <a className="text-sm text-blue-400 hover:underline" href={`/clients/${client.id}/edit`}>
+                    Edit
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -138,6 +164,24 @@ export default function ClientsPage() {
       </div>
     );
   }, [clients, error, loading]);
+
+  if (!mounted) {
+    return (
+      <section className="space-y-6">
+        <div className="card">
+          <p className="py-6 text-sm text-neutral-400">Loading…</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <section className="card">
+        <p className="py-6 text-sm text-neutral-400">Redirecting…</p>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">

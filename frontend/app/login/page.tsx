@@ -1,11 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
-import { api } from "@/lib/api-client";
 import type { components } from "@/lib/api-types";
 import { useToken } from "@/lib/useToken";
 
@@ -13,11 +12,14 @@ type TokenResponse = components["schemas"]["Token"];
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { token, setToken, clearToken } = useToken();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const redirectTo = searchParams?.get("redirectTo") || "/clients";
+  const registered = searchParams?.get("registered") === "1";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -30,14 +32,26 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const response = await api<TokenResponse>("/v1/auth/login", {
+      const response = await fetch("/api/session/login", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, password }),
       });
-      setToken(response.access_token);
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+        const detail = payload?.detail ?? "Login failed. Please check your credentials.";
+        setError(detail);
+        return;
+      }
+
+      const data = (await response.json()) as TokenResponse;
+      setToken(data.access_token);
       setEmail("");
       setPassword("");
-      router.push("/clients");
+      router.push(redirectTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -49,6 +63,7 @@ export default function LoginPage() {
     clearToken();
     setEmail("");
     setPassword("");
+    fetch("/api/session/logout", { method: "POST" }).catch(() => {});
   };
 
   if (token) {
@@ -80,13 +95,18 @@ export default function LoginPage() {
           Password
           <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" />
         </label>
+        {registered ? <p className="text-sm text-emerald-400">Account created. Please log in.</p> : null}
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
         <Button type="submit" loading={loading} className="w-full">
           Log in
         </Button>
       </form>
       <p className="text-xs text-neutral-500">
-        Need an account? Use the API (or `make backend-shell`) to run `POST /v1/auth/register` once, then log in here.
+        Need an account?{" "}
+        <a className="hover:underline" href="/register">
+          Create one now
+        </a>
+        .
       </p>
     </section>
   );
