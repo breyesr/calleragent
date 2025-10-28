@@ -45,9 +45,14 @@ export function HeaderNav() {
           Logout
         </button>
       ) : (
-        <a className="hover:underline" href="/login">
-          Login
-        </a>
+        <div className="flex items-center gap-3">
+          <a className="hover:underline" href="/login">
+            Login
+          </a>
+          <a className="hover:underline" href="/register">
+            Create account
+          </a>
+        </div>
       )}
     </nav>
   );

@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const redirectTo = searchParams?.get("redirectTo") || "/clients";
+  const registered = searchParams?.get("registered") === "1";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -94,13 +95,18 @@ export default function LoginPage() {
           Password
           <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" />
         </label>
+        {registered ? <p className="text-sm text-emerald-400">Account created. Please log in.</p> : null}
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
         <Button type="submit" loading={loading} className="w-full">
           Log in
         </Button>
       </form>
       <p className="text-xs text-neutral-500">
-        Need an account? Use the API (or `make backend-shell`) to run `POST /v1/auth/register` once, then log in here.
+        Need an account?{" "}
+        <a className="hover:underline" href="/register">
+          Create one now
+        </a>
+        .
       </p>
     </section>
   );
