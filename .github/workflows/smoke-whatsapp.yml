@@ -19,6 +19,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
+      - name: Preflight list files
+        run: |
+          pwd
+          ls -la
+          ls -la backend || true
+          cat infra/docker-compose.yml || true
+
       - name: Start backend stack
         run: |
           docker compose --env-file infra/.env -f infra/docker-compose.yml up -d backend worker redis
