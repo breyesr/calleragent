@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -35,6 +36,32 @@ const toIsoString = (value: string) => {
 };
 
 export default function AppointmentsPage() {
+  const router = useRouter();
+  const { token } = useToken();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !token) {
+      router.replace("/login");
+    }
+  }, [mounted, token, router]);
+
+  if (!mounted) {
+    return <p>Loading…</p>;
+  }
+
+  if (!token) {
+    return <p>Redirecting…</p>;
+  }
+
+  return <AppointmentsInner isAuthenticated={Boolean(token)} />;
+}
+
+function AppointmentsInner({ isAuthenticated }: { isAuthenticated: boolean }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsError, setClientsError] = useState<string | null>(null);
 
@@ -59,8 +86,6 @@ export default function AppointmentsPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  const { token } = useToken();
-  const isAuthenticated = Boolean(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -314,7 +339,7 @@ export default function AppointmentsPage() {
         </table>
       </div>
     );
-  }, [appointments, appointmentsError, appointmentsLoading, clients]);
+  }, [appointments, appointmentsError, appointmentsLoading, clients, isAuthenticated]);
 
   return (
     <section className="space-y-6">
