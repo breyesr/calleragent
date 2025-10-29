@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { api } from "@/lib/api-client";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
+import { api } from "@/lib/api-client";
 import type { paths } from "@/lib/api-types";
 import { useToken } from "@/lib/useToken";
 
@@ -16,6 +17,32 @@ type Client = ClientsResponse[number];
 const SEARCH_DEBOUNCE_MS = 300;
 
 export default function ClientsPage() {
+  const router = useRouter();
+  const { token } = useToken();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !token) {
+      router.replace("/login");
+    }
+  }, [mounted, token, router]);
+
+  if (!mounted) {
+    return <p>Loading…</p>;
+  }
+
+  if (!token) {
+    return <p>Redirecting…</p>;
+  }
+
+  return <ClientsInner isAuthenticated={Boolean(token)} />;
+}
+
+function ClientsInner({ isAuthenticated }: { isAuthenticated: boolean }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +55,6 @@ export default function ClientsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { token } = useToken();
-  const isAuthenticated = Boolean(token);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {

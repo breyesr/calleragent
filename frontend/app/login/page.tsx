@@ -86,7 +86,11 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="text-xs text-neutral-500">
-        Need an account? Use the API (or `make backend-shell`) to run `POST /v1/auth/register` once, then log in here.
+        Need an account?{" "}
+        <a className="hover:underline" href="/register">
+          Create one here
+        </a>
+        .
       </p>
     </section>
   );
