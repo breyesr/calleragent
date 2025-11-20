@@ -25,7 +25,11 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const status = error.response?.status ?? 0;
     if (status === 401 && typeof window !== "undefined") {
-      try { localStorage.removeItem("access_token"); } catch {}
+      try {
+        localStorage.removeItem("access_token");
+      } catch {
+        // ignore storage errors during sign-out fallback
+      }
       window.location.href = "/login";
     }
     return Promise.reject(error);
