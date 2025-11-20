@@ -106,17 +106,18 @@ function SettingsInner() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-md border border-neutral-900 bg-neutral-950/60 p-4 text-sm text-neutral-400">
-        <p className="text-xs uppercase tracking-wide text-neutral-500">
-          Home / Settings / <span className="text-neutral-200">Google Calendar</span>
-        </p>
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-100">Google Calendar integration</h1>
-          <p>Connect Google Calendar to let AgentCaller sync appointments and reminders.</p>
+      <div className="card space-y-4">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-blue-400">Google Calendar</p>
+          <h1 className="text-2xl font-semibold text-neutral-50">Integrate your Google Calendar</h1>
+          <p className="text-sm text-neutral-400">Connect to sync appointments and let WhatsApp reminders stay in sync with your real availability.</p>
         </div>
-        <Button type="button" className="w-full max-w-xs" variant="secondary">
-          Connect with Google
-        </Button>
+        <div className="rounded-md border border-neutral-800 bg-neutral-900/40 p-4">
+          <p className="text-sm text-neutral-300">Connect your Google account to manage appointments even outside the dashboard.</p>
+          <Button type="button" className="mt-4 w-full max-w-xs" variant="secondary">
+            Connect with Google
+          </Button>
+        </div>
       </div>
 
       <div className="card space-y-4">
