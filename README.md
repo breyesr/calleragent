@@ -31,3 +31,9 @@ Run `backend/scripts/smoke.sh` (after the stack is up) to verify the health endp
 ## Background tasks
 
 See [`docs/celery_tasks.md`](docs/celery_tasks.md) for running Celery worker/beat with Redis and verifying task endpoints.
+
+## Google Calendar integration
+
+- Fill the backend `.env` (or `infra/.env`) with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` (defaults to `http://localhost:8000/v1/integrations/google/callback`).
+- Start the stack and visit `/settings`; clicking **Connect with Google** initiates the OAuth consent flow. Once connected, tokens are encrypted at rest.
+- `GET /v1/calendar/events` now attempts to fetch from Google Calendar and gracefully falls back to the deterministic stub in `docs/calendar_stub.md` whenever the OAuth flow is not complete or Google returns an error.

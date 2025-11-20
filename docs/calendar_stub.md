@@ -23,7 +23,7 @@ A deterministic, read-only calendar endpoint that mocks Google Calendar data for
     }
     ```
 
-Events are derived from the current user’s email to keep responses deterministic and traceable.
+Events are derived from the current user’s email to keep responses deterministic and traceable. Once Google OAuth is connected (see `/settings`), the API attempts to serve real Google Calendar events first and uses this stub as a transparent fallback whenever Google is unreachable.
 
 ## Future Integration
 When migrating to Google Calendar:

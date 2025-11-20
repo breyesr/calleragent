@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, get_db
 from app.models.user import User
+from app.services.google_integration import fetch_google_events
 
 router = APIRouter()
 
@@ -40,6 +42,18 @@ def _mock_events(user: User, max_results: int) -> list[Event]:
 
 
 @router.get("/events", response_model=EventsResponse)
-def list_events(max_results: int = 10, current_user: User = Depends(get_current_user)) -> EventsResponse:
+def list_events(
+    max_results: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EventsResponse:
+    google_events = fetch_google_events(db, current_user.id, max_results)
+    if google_events:
+        normalized = [
+            Event(id=item["id"], summary=item["summary"], start=item["start"], end=item["end"], location=item["location"])
+            for item in google_events
+        ]
+        return EventsResponse(items=normalized)
+
     events = _mock_events(current_user, max_results)
     return EventsResponse(items=events)
