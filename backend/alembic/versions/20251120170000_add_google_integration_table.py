@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "20251120170000_add_google_integration_table"
-down_revision: Union[str, None] = "20251007192418_add_created_at_to_users"
+revision: str = "20251120170000"
+down_revision: Union[str, None] = "20251007192418"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
