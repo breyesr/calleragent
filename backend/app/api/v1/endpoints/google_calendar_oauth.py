@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,25 @@ from app.models.google_account import GoogleAccount
 from app.models.user import User
 
 router = APIRouter()
+
+
+@router.get("/oauth/start")
+async def google_oauth_start(state: Optional[str] = None) -> dict:
+    params: dict[str, str] = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_OAUTH_REDIRECT_URL,
+        "response_type": "code",
+        "scope": settings.GOOGLE_API_SCOPES,
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+    }
+    if state is not None:
+        params["state"] = state
+
+    query = urlencode(params)
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+    return {"auth_url": auth_url}
 
 
 @router.get("/oauth/callback")
