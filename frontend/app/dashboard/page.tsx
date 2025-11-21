@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import axios from "axios";
 
 import Button from "@/components/Button";
-import api from "@/lib/api";
 import { getStoredToken } from "@/lib/useToken";
 
 type StartResponse = { auth_url: string };
@@ -22,9 +22,13 @@ export default function Page() {
 
     setLoading(true);
     try {
-      const response = await api.get<StartResponse>("/v1/integrations/google/calendar/oauth/start", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+      const response = await axios.get<StartResponse>(
+        `${apiBase}/v1/integrations/google/calendar/oauth/start`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const authUrl = response.data?.auth_url;
       if (!authUrl) {
         throw new Error("Sin URL de autorización");
