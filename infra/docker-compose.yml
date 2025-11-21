@@ -45,6 +45,10 @@ services:
       APP_ENV: docker
       API_V1_PREFIX: /v1
       SECRET_KEY: change-this-in-prod
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_OAUTH_REDIRECT_URL: ${GOOGLE_OAUTH_REDIRECT_URL}
+      GOOGLE_API_SCOPES: ${GOOGLE_API_SCOPES}
     depends_on:
       db:
         condition: service_healthy
