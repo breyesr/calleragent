@@ -18,8 +18,9 @@ class Settings(BaseModel):
         "http://localhost:8000/v1/integrations/google/calendar/oauth/callback",
     )
     GOOGLE_API_SCOPES: str = os.getenv(
-        "GOOGLE_API_SCOPES", "https://www.googleapis.com/auth/calendar.readonly"
+        "GOOGLE_API_SCOPES", "openid email profile https://www.googleapis.com/auth/calendar.readonly"
     )
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3002")
 
     @property
     def CELERY_BROKER_URL(self) -> str:

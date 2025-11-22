@@ -5,7 +5,8 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import get_current_user, get_db
@@ -37,10 +38,25 @@ async def google_oauth_start(current_user: User = Depends(get_current_user)) -> 
     return {"auth_url": auth_url}
 
 
+@router.get("/status")
+async def google_oauth_status(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> dict:
+    account = (
+        db.query(GoogleAccount)
+        .filter(GoogleAccount.user_id == current_user.id, GoogleAccount.provider == "google")
+        .first()
+    )
+    if not account:
+        return {"connected": False}
+    return {"connected": True, "email": account.google_account_email}
+
+
 @router.get("/oauth/callback")
 async def google_oauth_callback(
     code: Optional[str] = None,
     state: Optional[str] = None,
+    request: Request | None = None,
     db: Session = Depends(get_db),
 ) -> dict:
     if not code:
@@ -126,4 +142,13 @@ async def google_oauth_callback(
     db.commit()
     db.refresh(account)
 
-    return {"status": "connected", "email": email}
+    response_data = {"status": "connected", "email": email}
+    accept_header = request.headers.get("accept", "") if request else ""
+    redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/settings?google=connected"
+
+    if "text/html" in accept_header or "*/*" in accept_header:
+        response = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+        response.headers["X-Connected-Email"] = email
+        return response
+
+    return response_data
