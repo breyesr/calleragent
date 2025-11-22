@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.config import settings
+from app.core.security import create_google_oauth_state, decode_google_oauth_state
 from app.models.google_account import GoogleAccount
 from app.models.user import User
 
@@ -17,7 +18,9 @@ router = APIRouter()
 
 
 @router.get("/oauth/start")
-async def google_oauth_start(state: Optional[str] = None) -> dict:
+async def google_oauth_start(current_user: User = Depends(get_current_user)) -> dict:
+    state = create_google_oauth_state(current_user.id)
+
     params: dict[str, str] = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_OAUTH_REDIRECT_URL,
@@ -27,8 +30,7 @@ async def google_oauth_start(state: Optional[str] = None) -> dict:
         "include_granted_scopes": "true",
         "prompt": "consent",
     }
-    if state is not None:
-        params["state"] = state
+    params["state"] = state
 
     query = urlencode(params)
     auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
@@ -40,10 +42,19 @@ async def google_oauth_callback(
     code: Optional[str] = None,
     state: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> dict:
     if not code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing code")
+    if not state:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing_state")
+
+    user_id = decode_google_oauth_state(state)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_state")
+
+    current_user = db.get(User, user_id)
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_state")
 
     token_payload = {
         "code": code,

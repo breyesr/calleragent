@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -38,3 +38,23 @@ def validate_token(token: str) -> Dict[str, Any]:
         return decode_token(token)
     except JWTError as exc:
         raise ValueError("Invalid token") from exc
+
+
+def create_google_oauth_state(user_id: int, expires_minutes: int = 15) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    payload = {"sub": user_id, "exp": expire, "aud": "google_oauth_state"}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_google_oauth_state(state: str) -> Optional[int]:
+    try:
+        payload = jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM], audience="google_oauth_state")
+        sub = payload.get("sub")
+        if isinstance(sub, int):
+            return sub
+        # Allow strings that represent ints, though we expect int
+        if isinstance(sub, str) and sub.isdigit():
+            return int(sub)
+    except JWTError:
+        return None
+    return None
