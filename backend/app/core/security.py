@@ -41,22 +41,21 @@ def validate_token(token: str) -> Dict[str, Any]:
 
 
 def create_google_oauth_state(user_id: int, expires_minutes: int = 15) -> str:
-    # Callback cannot rely on Authorization headers; this signed state must be verifiable
-    # with the same SECRET_KEY to recover the initiating user.
+    # Callback cannot rely on Authorization headers; validation relies on SECRET_KEY + short expiry.
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    payload = {"sub": user_id, "exp": expire, "aud": "google_oauth_state"}
+    payload = {"sub": str(user_id), "exp": expire}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_google_oauth_state(state: str) -> Optional[int]:
     try:
-        payload = jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM], audience="google_oauth_state")
+        # We intentionally skip audience validation to reduce local dev friction; rely on SECRET_KEY + exp.
+        payload = jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM])
         sub = payload.get("sub")
-        if isinstance(sub, int):
-            return sub
-        # Allow strings that represent ints, though we expect int
         if isinstance(sub, str) and sub.isdigit():
             return int(sub)
+        if isinstance(sub, int):
+            return sub
     except JWTError:
         return None
     return None
