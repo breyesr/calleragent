@@ -44,7 +44,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       APP_ENV: docker
       API_V1_PREFIX: /v1
-      SECRET_KEY: change-this-in-prod
+      SECRET_KEY: ${SECRET_KEY}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_OAUTH_REDIRECT_URL: ${GOOGLE_OAUTH_REDIRECT_URL}
