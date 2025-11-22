@@ -143,12 +143,23 @@ async def google_oauth_callback(
     db.refresh(account)
 
     response_data = {"status": "connected", "email": email}
-    accept_header = request.headers.get("accept", "") if request else ""
     redirect_url = f"{settings.FRONTEND_URL.rstrip('/')}/settings?google=connected"
 
-    if "text/html" in accept_header or "*/*" in accept_header:
-        response = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-        response.headers["X-Connected-Email"] = email
-        return response
+    accept_header = request.headers.get("accept", "") if request else ""
+    x_requested_with = request.headers.get("x-requested-with", "") if request else ""
+    api_client_param = False
+    if request and request.query_params.get("api_client") == "true":
+        api_client_param = True
 
-    return response_data
+    is_api_client = (
+        api_client_param
+        or x_requested_with.lower() == "xmlhttprequest"
+        or ("application/json" in accept_header and "text/html" not in accept_header)
+    )
+
+    if is_api_client:
+        return response_data
+
+    response = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    response.headers["X-Connected-Email"] = email
+    return response
