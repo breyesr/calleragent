@@ -10,7 +10,9 @@ __pycache__/
 .env
 .env.*
 !/.env
-!/infra/.env
+!backend/.env.example
+frontend/.env.local
+infra/.env
 .DS_Store
 dist/
 build/

@@ -13,3 +13,5 @@ python-dotenv==1.0.1
 email-validator>=2.1.0
 celery[redis]==5.3.6
 redis==5.0.1
+google-auth-oauthlib
+google-api-python-client
