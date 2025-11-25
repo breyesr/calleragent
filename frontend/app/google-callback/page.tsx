@@ -29,7 +29,7 @@ export default function GoogleCallbackPage() {
         if (data.access_token) {
           localStorage.setItem('google_access_token', data.access_token);
           setStatus('¡Conexión exitosa! Redirigiendo...');
-          setTimeout(() => router.push('/dashboard/calendar'), 1500);
+          setTimeout(() => router.push('/dashboard/settings/calendar'), 1500);
         }
       } catch (error) {
         console.error(error);
