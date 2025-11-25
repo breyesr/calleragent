@@ -4,7 +4,9 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import os
-import traceback
+import datetime
+from typing import Optional
+from pydantic import BaseModel
 
 from app.api import deps
 from app.models.user import User
@@ -16,6 +18,22 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 def get_credential_record(db: Session, user_id: int):
     return db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
+
+
+def get_google_creds_with_refresh(db: Session, user_id: int) -> Optional[Credentials]:
+    cred = get_credential_record(db, user_id)
+    if not cred or not cred.access_token:
+        return None
+
+    creds = Credentials(
+        token=cred.access_token,
+        refresh_token=cred.refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    )
+
+    return creds
 
 @router.get("/auth-url")
 def get_auth_url(redirect_uri: str = Query(...)):
@@ -76,30 +94,36 @@ def exchange_code(code: str, redirect_uri: str, db: Session = Depends(deps.get_d
 
 @router.get("/calendars")
 def list_calendars(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
-    cred = get_credential_record(db, current_user.id)
-    if not cred:
+    creds = get_google_creds_with_refresh(db, current_user.id)
+    if not creds:
         raise HTTPException(401, "No conectado")
 
     try:
-        creds = Credentials(
-            token=cred.access_token,
-            refresh_token=cred.refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=os.getenv("GOOGLE_CLIENT_ID"),
-            client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-        )
         service = build('calendar', 'v3', credentials=creds)
         items = service.calendarList().list(minAccessRole='reader').execute().get('items', [])
         return {"calendars": [{'id': c['id'], 'summary': c['summary'], 'primary': c.get('primary', False)} for c in items]}
     except Exception as e:
         raise HTTPException(401, str(e))
 
+class CalendarSettingsUpdate(BaseModel):
+    calendar_id: str
+    timezone: Optional[str] = None
+
+
+@router.get("/credentials")
+def get_credential_settings(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
+    cred = get_credential_record(db, current_user.id)
+    if not cred:
+        raise HTTPException(404, "No conectado a Google Calendar.")
+    return {"calendar_id": cred.calendar_id, "timezone": "America/Mexico_City"}
+
+
 @router.put("/settings")
-def update_settings(calendar_id: str, db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
+def update_settings(payload: CalendarSettingsUpdate, db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
     cred = get_credential_record(db, current_user.id)
     if not cred:
         raise HTTPException(404, "No conectado")
-    cred.calendar_id = calendar_id
+    cred.calendar_id = payload.calendar_id
     db.commit()
     return {"msg": "Calendario actualizado"}
 
@@ -119,13 +143,9 @@ def list_events(db: Session = Depends(deps.get_db), current_user: User = Depends
         return {"count": 0, "events": []}
 
     try:
-        creds = Credentials(
-            token=cred.access_token,
-            refresh_token=cred.refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=os.getenv("GOOGLE_CLIENT_ID"),
-            client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-        )
+        creds = get_google_creds_with_refresh(db, current_user.id)
+        if not creds:
+            return {"count": 0, "events": []}
         service = build('calendar', 'v3', credentials=creds)
 
         target_calendar = cred.calendar_id or 'primary'
@@ -142,3 +162,40 @@ def list_events(db: Session = Depends(deps.get_db), current_user: User = Depends
     except Exception as e:
         print(f"Event fetch error: {e}")
         return {"count": 0, "events": []}
+
+
+@router.patch("/event/{event_id}")
+def update_google_event(
+    event_id: str,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+    starts_at: Optional[datetime.datetime] = Query(None),
+    ends_at: Optional[datetime.datetime] = Query(None),
+    summary: Optional[str] = Query(None),
+    notes: Optional[str] = Query(None),
+):
+    """Modifica un evento existente en Google Calendar usando las credenciales almacenadas."""
+    creds = get_google_creds_with_refresh(db, current_user.id)
+    cred_record = get_credential_record(db, current_user.id)
+    if not creds or not cred_record:
+        raise HTTPException(401, "No conectado o token expirado")
+
+    calendar_id = cred_record.calendar_id or 'primary'
+
+    try:
+        service = build('calendar', 'v3', credentials=creds)
+        event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+
+        if starts_at:
+            event["start"]["dateTime"] = starts_at.isoformat()
+        if ends_at:
+            event["end"]["dateTime"] = ends_at.isoformat()
+        if summary:
+            event["summary"] = summary
+        if notes:
+            event["description"] = notes
+
+        updated_event = service.events().update(calendarId=calendar_id, eventId=event_id, body=event).execute()
+        return {"msg": "Evento actualizado en Google", "event_id": updated_event.get("id")}
+    except Exception as exc:
+        raise HTTPException(400, f"Error al actualizar evento de Google: {exc}")
