@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Lock } from "lucide-react";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
@@ -10,6 +11,7 @@ import { api } from "@/lib/api-client";
 import type { paths } from "@/lib/api-types";
 import { useToken } from "@/lib/useToken";
 
+// --- TIPOS EXISTENTES ---
 type ClientsResponse = paths["/v1/clients"]["get"]["responses"][200]["content"]["application/json"];
 type Client = ClientsResponse[number];
 type AppointmentsResponse = paths["/v1/appointments"]["get"]["responses"][200]["content"]["application/json"];
@@ -18,6 +20,27 @@ type AppointmentCreateBody = paths["/v1/appointments"]["post"]["requestBody"]["c
 type AppointmentCreateResponse = paths["/v1/appointments"]["post"]["responses"][201]["content"]["application/json"];
 type AppointmentUpdateBody = paths["/v1/appointments/{appointment_id}"]["patch"]["requestBody"]["content"]["application/json"];
 type AppointmentUpdateResponse = paths["/v1/appointments/{appointment_id}"]["patch"]["responses"][200]["content"]["application/json"];
+
+// --- NUEVOS TIPOS PARA GOOGLE ---
+type GoogleEvent = {
+  id: string;
+  summary: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+  description?: string;
+};
+
+// Tipo unificado para la tabla
+type UnifiedEvent = {
+  id: string | number;
+  source: "local" | "google";
+  title: string; // Nombre del cliente o Título del evento
+  subtitle?: string; // Teléfono o detalle extra
+  startsAt: string;
+  endsAt: string;
+  notes?: string;
+  raw: Appointment | GoogleEvent; // Objeto original para acciones
+};
 
 const toDateTimeLocal = (iso: string) => {
   const date = new Date(iso);
@@ -38,11 +61,22 @@ export default function AppointmentsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsError, setClientsError] = useState<string | null>(null);
 
+  // Estado Local
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState<string | null>(null);
+  
+  // Estado Google
+  const [googleEvents, setGoogleEvents] = useState<GoogleEvent[]>([]);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [selectedCalendarId, setSelectedCalendarId] = useState<string>("primary");
+  const [googleRefreshKey, setGoogleRefreshKey] = useState(0);
+  const [hasGoogleToken, setHasGoogleToken] = useState(false);
+  
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Form States (Create)
   const [createClientId, setCreateClientId] = useState("");
   const [createStartsAt, setCreateStartsAt] = useState("");
   const [createEndsAt, setCreateEndsAt] = useState("");
@@ -51,6 +85,7 @@ export default function AppointmentsPage() {
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  // Form States (Edit)
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -59,29 +94,26 @@ export default function AppointmentsPage() {
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  
   const { token } = useToken();
   const isAuthenticated = Boolean(token);
 
+  // 1. Cargar Clientes
   useEffect(() => {
     let cancelled = false;
     async function loadClients() {
       try {
         const data = await api<ClientsResponse>("/v1/clients");
-        if (!cancelled) {
-          setClients(data);
-        }
+        if (!cancelled) setClients(data);
       } catch (err) {
-        if (!cancelled) {
-          setClientsError(err instanceof Error ? err.message : String(err));
-        }
+        if (!cancelled) setClientsError(err instanceof Error ? err.message : String(err));
       }
     }
     loadClients();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
+  // 2. Cargar Citas Locales
   useEffect(() => {
     let cancelled = false;
     async function loadAppointments() {
@@ -89,26 +121,71 @@ export default function AppointmentsPage() {
       setAppointmentsError(null);
       try {
         const data = await api<AppointmentsResponse>("/v1/appointments");
-        if (!cancelled) {
-          setAppointments(data);
-        }
+        if (!cancelled) setAppointments(data);
       } catch (err) {
         if (!cancelled) {
           setAppointmentsError(err instanceof Error ? err.message : String(err));
           setAppointments([]);
         }
       } finally {
-        if (!cancelled) {
-          setAppointmentsLoading(false);
-        }
+        if (!cancelled) setAppointmentsLoading(false);
       }
     }
     loadAppointments();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
+  // 2b. Cargar selección de calendario para Google
+  useEffect(() => {
+    const stored = localStorage.getItem("selected_calendar_id");
+    if (stored) setSelectedCalendarId(stored);
+  }, []);
+
+  // 3. Cargar Eventos de Google (Si está conectado)
+  useEffect(() => {
+    const googleToken = localStorage.getItem("google_access_token");
+    if (!googleToken) {
+      setHasGoogleToken(false);
+      setGoogleEvents([]);
+      return;
+    }
+    setHasGoogleToken(true);
+
+    let cancelled = false;
+    async function loadGoogleEvents() {
+      setGoogleLoading(true);
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(
+          `${apiUrl}/v1/calendar/events?access_token=${googleToken}&calendar_id=${selectedCalendarId || "primary"}`
+        );
+        
+        if (res.status === 401) {
+          localStorage.removeItem("google_access_token"); // Token expirado
+          setHasGoogleToken(false);
+          setGoogleEvents([]);
+          setGoogleError("Tu sesión de Google expiró. Conecta nuevamente.");
+          return;
+        }
+
+        const data = await res.json();
+        if (!cancelled && data.events) {
+          setGoogleEvents(data.events);
+          setGoogleError(null);
+        }
+      } catch (err) {
+        console.error("Error loading google events", err);
+        if (!cancelled) setGoogleError("No se pudieron cargar eventos de Google.");
+      } finally {
+        if (!cancelled) setGoogleLoading(false);
+      }
+    }
+    loadGoogleEvents();
+    return () => { cancelled = true; };
+  }, [refreshKey, googleRefreshKey, selectedCalendarId]);
+
+  // --- ACTIONS HANDLERS ---
+  
   const resetCreateForm = () => {
     setCreateClientId("");
     setCreateStartsAt("");
@@ -121,34 +198,19 @@ export default function AppointmentsPage() {
     setCreateError(null);
     setCreateSuccess(null);
 
-    if (!createClientId) {
-      setCreateError("Client is required.");
-      return;
-    }
-    if (!createStartsAt || !createEndsAt) {
-      setCreateError("Start and end times are required.");
-      return;
-    }
+    if (!createClientId) return setCreateError("Client is required.");
+    if (!createStartsAt || !createEndsAt) return setCreateError("Start and end times are required.");
 
-    let startIso: string;
-    let endIso: string;
+    let startIso: string, endIso: string;
     try {
       startIso = toIsoString(createStartsAt);
       endIso = toIsoString(createEndsAt);
     } catch {
-      setCreateError("Please provide valid dates.");
-      return;
+      return setCreateError("Please provide valid dates.");
     }
 
-    if (endIso <= startIso) {
-      setCreateError("End time must be after the start time.");
-      return;
-    }
-
-    if (!isAuthenticated) {
-      setCreateError("Please log in to schedule appointments.");
-      return;
-    }
+    if (endIso <= startIso) return setCreateError("End time must be after the start time.");
+    if (!isAuthenticated) return setCreateError("Please log in to schedule appointments.");
 
     setCreating(true);
     try {
@@ -163,7 +225,7 @@ export default function AppointmentsPage() {
       });
       setCreateSuccess("Appointment scheduled.");
       resetCreateForm();
-      setRefreshKey((value) => value + 1);
+      setRefreshKey((v) => v + 1);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -172,15 +234,11 @@ export default function AppointmentsPage() {
   };
 
   const handleDelete = async (appointment: Appointment) => {
-    if (!isAuthenticated) {
-      alert("Please log in to delete appointments.");
-      return;
-    }
-    const confirmed = window.confirm("Delete this appointment?");
-    if (!confirmed) return;
+    if (!isAuthenticated) return alert("Please log in to delete appointments.");
+    if (!window.confirm("Delete this appointment?")) return;
     try {
       await api<void>(`/v1/appointments/${appointment.id}`, { method: "DELETE" });
-      setRefreshKey((value) => value + 1);
+      setRefreshKey((v) => v + 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     }
@@ -199,34 +257,19 @@ export default function AppointmentsPage() {
 
   const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedAppointment) return;
-    if (!isAuthenticated) {
-      setEditError("Please log in to update appointments.");
-      return;
-    }
+    if (!selectedAppointment || !isAuthenticated) return;
 
     setEditError(null);
     setEditSuccess(null);
 
-    if (!editStartsAt || !editEndsAt) {
-      setEditError("Start and end times are required.");
-      return;
-    }
-
-    let startIso: string;
-    let endIso: string;
+    let startIso: string, endIso: string;
     try {
       startIso = toIsoString(editStartsAt);
       endIso = toIsoString(editEndsAt);
     } catch {
-      setEditError("Please provide valid dates.");
-      return;
+      return setEditError("Invalid dates.");
     }
-
-    if (endIso <= startIso) {
-      setEditError("End time must be after the start time.");
-      return;
-    }
+    if (endIso <= startIso) return setEditError("End time must be after start.");
 
     setEditing(true);
     try {
@@ -240,7 +283,7 @@ export default function AppointmentsPage() {
       });
       setEditSuccess("Appointment updated.");
       setEditOpen(false);
-      setRefreshKey((value) => value + 1);
+      setRefreshKey((v) => v + 1);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -248,80 +291,141 @@ export default function AppointmentsPage() {
     }
   };
 
+  // --- UNIFIED LIST LOGIC ---
+  const unifiedAppointments = useMemo(() => {
+    const list: UnifiedEvent[] = [];
+    const clientLookup = new Map(clients.map((c) => [c.id, c]));
+
+    // 1. Map Local Appointments
+    appointments.forEach((appt) => {
+      const client = clientLookup.get(appt.client_id);
+      list.push({
+        id: appt.id,
+        source: "local",
+        title: client ? client.name : `Client #${appt.client_id}`,
+        subtitle: client?.phone,
+        startsAt: appt.starts_at,
+        endsAt: appt.ends_at,
+        notes: appt.notes || undefined,
+        raw: appt,
+      });
+    });
+
+    // 2. Map Google Events
+    googleEvents.forEach((evt) => {
+      // Google a veces devuelve 'date' (todo el día) o 'dateTime'
+      const start = evt.start.dateTime || evt.start.date || "";
+      const end = evt.end.dateTime || evt.end.date || "";
+      
+      list.push({
+        id: evt.id,
+        source: "google",
+        title: evt.summary || "(No Title)",
+        subtitle: "Google Event",
+        startsAt: start,
+        endsAt: end,
+        notes: evt.description,
+        raw: evt, // Guardamos el evento original
+      });
+    });
+
+    // 3. Sort by Date
+    return list.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  }, [appointments, googleEvents, clients]);
+
+  // --- RENDER TABLE ---
   const appointmentRows = useMemo(() => {
-    if (appointmentsLoading) {
-      return <p className="py-6 text-sm text-neutral-400">Loading appointments…</p>;
-    }
-    if (appointmentsError) {
-      return <p className="py-6 text-sm text-red-400">{appointmentsError}</p>;
-    }
-    if (appointments.length === 0) {
-      return <p className="py-6 text-sm text-neutral-400">No appointments scheduled.</p>;
-    }
-    const lookup = new Map(clients.map((client) => [client.id, client]));
+    if (appointmentsLoading) return <p className="py-6 text-sm text-neutral-400">Loading appointments…</p>;
+    if (appointmentsError) return <p className="py-6 text-sm text-red-400">{appointmentsError}</p>;
+    if (unifiedAppointments.length === 0) return <p className="py-6 text-sm text-neutral-400">No appointments scheduled.</p>;
+
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-neutral-800 text-xs uppercase text-neutral-500">
             <tr>
-              <th className="px-3 py-2">ID</th>
-              <th className="px-3 py-2">Client</th>
-              <th className="px-3 py-2">Starts</th>
-              <th className="px-3 py-2">Ends</th>
-              <th className="px-3 py-2">Notes</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <th className="px-3 py-2">Cliente / Evento</th>
+              <th className="px-3 py-2">Inicio</th>
+              <th className="px-3 py-2">Fin</th>
+              <th className="px-3 py-2">Notas</th>
+              <th className="px-3 py-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {appointments.map((appointment) => {
-              const client = lookup.get(appointment.client_id);
-              return (
-                <tr key={appointment.id} className="border-b border-neutral-900">
-                  <td className="px-3 py-2 text-neutral-400">{appointment.id}</td>
-                  <td className="px-3 py-2">
-                    {client ? (
-                      <div>
-                        <p>{client.name}</p>
-                        <p className="text-xs text-neutral-500">{client.phone}</p>
-                      </div>
-                    ) : (
-                      `Client #${appointment.client_id}`
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{new Date(appointment.starts_at).toLocaleString()}</td>
-                  <td className="px-3 py-2">{new Date(appointment.ends_at).toLocaleString()}</td>
-                  <td className="px-3 py-2">
-                    {appointment.notes ? <span className="text-neutral-200">{appointment.notes}</span> : <span className="text-neutral-500">—</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {isAuthenticated ? (
-                      <div className="flex justify-end gap-2">
-                        <Button type="button" variant="secondary" onClick={() => openEditModal(appointment)}>
-                          Edit
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={() => handleDelete(appointment)}>
-                          Delete
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-neutral-500">Read only</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {unifiedAppointments.map((item) => (
+              <tr
+                key={`${item.source}-${item.id}`}
+                className={`border-b border-neutral-900 ${item.source === "google" ? "bg-blue-900/10" : ""}`}
+              >
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    {item.source === "google" ? (
+                      <span className="flex items-center gap-1 text-blue-400 text-xs" title="Evento de Google">
+                        <Lock className="w-3 h-3" /> Google Calendar
+                      </span>
+                    ) : null}
+                    <div>
+                      <p className={item.source === "google" ? "font-medium text-blue-200" : ""}>{item.title}</p>
+                      {item.subtitle ? <p className="text-xs text-neutral-500">{item.subtitle}</p> : null}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-2">{new Date(item.startsAt).toLocaleString()}</td>
+                <td className="px-3 py-2">{new Date(item.endsAt).toLocaleString()}</td>
+                <td className="px-3 py-2 max-w-xs truncate">
+                  {item.notes ? (
+                    <span className="text-neutral-200" title={item.notes}>
+                      {item.notes}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-500">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {item.source === "local" && isAuthenticated ? (
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="secondary" onClick={() => openEditModal(item.raw as Appointment)}>
+                        Edit
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => handleDelete(item.raw as Appointment)}>
+                        Delete
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="flex items-center justify-end gap-1 text-xs text-neutral-600">
+                      <Lock className="w-3 h-3" /> Externo
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     );
-  }, [appointments, appointmentsError, appointmentsLoading, clients]);
+  }, [unifiedAppointments, appointmentsLoading, appointmentsError, isAuthenticated]);
 
   return (
     <section className="space-y-6">
       <div className="card space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold">Appointments</h1>
-          <p className="text-sm text-neutral-400">Upcoming schedules across all clients.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Appointments</h1>
+            <p className="text-sm text-neutral-400">Upcoming schedules across all clients & calendars.</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            {googleError ? <span className="text-red-400">{googleError}</span> : null}
+            {googleLoading ? <span className="text-blue-400 animate-pulse">Syncing Google Calendar...</span> : null}
+            {hasGoogleToken ? (
+              <button
+                type="button"
+                className="rounded border border-neutral-700 px-3 py-1 text-neutral-200 hover:border-neutral-500"
+                onClick={() => setGoogleRefreshKey((v) => v + 1)}
+              >
+                Refrescar Google
+              </button>
+            ) : null}
+          </div>
         </div>
         {appointmentRows}
       </div>
