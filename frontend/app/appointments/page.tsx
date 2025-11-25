@@ -1,508 +1,353 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Lock } from "lucide-react";
+import { Calendar as CalendarIcon, Lock } from "lucide-react";
 
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import { api } from "@/lib/api-client";
-import type { paths } from "@/lib/api-types";
 import { useToken } from "@/lib/useToken";
+import type { paths } from "@/lib/api-types";
 
-// --- TIPOS EXISTENTES ---
-type ClientsResponse = paths["/v1/clients"]["get"]["responses"][200]["content"]["application/json"];
-type Client = ClientsResponse[number];
-type AppointmentsResponse = paths["/v1/appointments"]["get"]["responses"][200]["content"]["application/json"];
-type Appointment = AppointmentsResponse[number];
-type AppointmentCreateBody = paths["/v1/appointments"]["post"]["requestBody"]["content"]["application/json"];
-type AppointmentCreateResponse = paths["/v1/appointments"]["post"]["responses"][201]["content"]["application/json"];
-type AppointmentUpdateBody = paths["/v1/appointments/{appointment_id}"]["patch"]["requestBody"]["content"]["application/json"];
-type AppointmentUpdateResponse = paths["/v1/appointments/{appointment_id}"]["patch"]["responses"][200]["content"]["application/json"];
+// Tipos básicos
+type Client = { id: number; name: string; phone: string };
+type Appointment = { id: number; client_id: number; starts_at: string; ends_at: string; notes?: string };
+type GoogleEvent = { id: string; summary: string; start: any; end: any; description?: string };
 
-// --- NUEVOS TIPOS PARA GOOGLE ---
-type GoogleEvent = {
-  id: string;
-  summary: string;
-  start: { dateTime?: string; date?: string };
-  end: { dateTime?: string; date?: string };
-  description?: string;
-};
-
-// Tipo unificado para la tabla
-type UnifiedEvent = {
-  id: string | number;
-  source: "local" | "google";
-  title: string; // Nombre del cliente o Título del evento
-  subtitle?: string; // Teléfono o detalle extra
-  startsAt: string;
-  endsAt: string;
-  notes?: string;
-  raw: Appointment | GoogleEvent; // Objeto original para acciones
-};
-
+const toIsoString = (value: string) => new Date(value).toISOString();
 const toDateTimeLocal = (iso: string) => {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-
-const toIsoString = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("Invalid date");
-  }
-  return date.toISOString();
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 export default function AppointmentsPage() {
+  const { token } = useToken();
   const [clients, setClients] = useState<Client[]>([]);
-  const [clientsError, setClientsError] = useState<string | null>(null);
-
-  // Estado Local
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
-  const [appointmentsError, setAppointmentsError] = useState<string | null>(null);
-  
-  // Estado Google
   const [googleEvents, setGoogleEvents] = useState<GoogleEvent[]>([]);
+
+  const [loading, setLoading] = useState(true);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleError, setGoogleError] = useState<string | null>(null);
-  const [selectedCalendarId, setSelectedCalendarId] = useState<string>("primary");
-  const [googleRefreshKey, setGoogleRefreshKey] = useState(0);
-  const [hasGoogleToken, setHasGoogleToken] = useState(false);
-  
+  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Form States (Create)
+  // Form States
   const [createClientId, setCreateClientId] = useState("");
   const [createStartsAt, setCreateStartsAt] = useState("");
   const [createEndsAt, setCreateEndsAt] = useState("");
   const [createNotes, setCreateNotes] = useState("");
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  // Form States (Edit)
+  // Edit States
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editSuccess, setEditSuccess] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editStartsAt, setEditStartsAt] = useState("");
   const [editEndsAt, setEditEndsAt] = useState("");
   const [editNotes, setEditNotes] = useState("");
-  
-  const { token } = useToken();
-  const isAuthenticated = Boolean(token);
 
-  // 1. Cargar Clientes
+  // 1. Cargar Datos Iniciales (Clientes y Citas Locales)
   useEffect(() => {
-    let cancelled = false;
-    async function loadClients() {
-      try {
-        const data = await api<ClientsResponse>("/v1/clients");
-        if (!cancelled) setClients(data);
-      } catch (err) {
-        if (!cancelled) setClientsError(err instanceof Error ? err.message : String(err));
-      }
-    }
-    loadClients();
-    return () => { cancelled = true; };
-  }, []);
+    if (!token) return;
 
-  // 2. Cargar Citas Locales
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAppointments() {
-      setAppointmentsLoading(true);
-      setAppointmentsError(null);
+    async function loadData() {
+      setLoading(true);
       try {
-        const data = await api<AppointmentsResponse>("/v1/appointments");
-        if (!cancelled) setAppointments(data);
+        const [clientsData, apptsData] = await Promise.all([
+          api<Client[]>("/v1/clients"),
+          api<Appointment[]>("/v1/appointments")
+        ]);
+        setClients(clientsData);
+        setAppointments(apptsData);
       } catch (err) {
-        if (!cancelled) {
-          setAppointmentsError(err instanceof Error ? err.message : String(err));
-          setAppointments([]);
-        }
+        console.error(err);
+        setError("Error cargando datos locales.");
       } finally {
-        if (!cancelled) setAppointmentsLoading(false);
+        setLoading(false);
       }
     }
-    loadAppointments();
-    return () => { cancelled = true; };
-  }, [refreshKey]);
+    loadData();
+  }, [token, refreshKey]);
 
-  // 2b. Cargar selección de calendario para Google
+  // 2. Cargar Eventos de Google (Vía Backend Seguro)
   useEffect(() => {
-    const stored = localStorage.getItem("selected_calendar_id");
-    if (stored) setSelectedCalendarId(stored);
-  }, []);
+    if (!token) return;
 
-  // 3. Cargar Eventos de Google (Si está conectado)
-  useEffect(() => {
-    const googleToken = localStorage.getItem("google_access_token");
-    if (!googleToken) {
-      setHasGoogleToken(false);
-      setGoogleEvents([]);
-      return;
-    }
-    setHasGoogleToken(true);
-
-    let cancelled = false;
-    async function loadGoogleEvents() {
+    async function loadGoogle() {
       setGoogleLoading(true);
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const res = await fetch(
-          `${apiUrl}/v1/calendar/events?access_token=${googleToken}&calendar_id=${selectedCalendarId || "primary"}`
-        );
-        
-        if (res.status === 401) {
-          localStorage.removeItem("google_access_token"); // Token expirado
-          setHasGoogleToken(false);
-          setGoogleEvents([]);
-          setGoogleError("Tu sesión de Google expiró. Conecta nuevamente.");
-          return;
-        }
+        const res = await fetch(`${apiUrl}/v1/calendar/events`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
-        const data = await res.json();
-        if (!cancelled && data.events) {
-          setGoogleEvents(data.events);
-          setGoogleError(null);
+        if (res.ok) {
+          const data = await res.json();
+          setGoogleEvents(data.events || []);
+        } else {
+          console.log("Google Calendar no conectado o error de sync");
+          setGoogleEvents([]);
         }
       } catch (err) {
-        console.error("Error loading google events", err);
-        if (!cancelled) setGoogleError("No se pudieron cargar eventos de Google.");
+        console.error("Error fetching google events", err);
       } finally {
-        if (!cancelled) setGoogleLoading(false);
+        setGoogleLoading(false);
       }
     }
-    loadGoogleEvents();
-    return () => { cancelled = true; };
-  }, [refreshKey, googleRefreshKey, selectedCalendarId]);
+    loadGoogle();
+  }, [token, refreshKey]);
 
-  // --- ACTIONS HANDLERS ---
-  
-  const resetCreateForm = () => {
-    setCreateClientId("");
-    setCreateStartsAt("");
-    setCreateEndsAt("");
-    setCreateNotes("");
-  };
-
-  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setCreateError(null);
-    setCreateSuccess(null);
-
-    if (!createClientId) return setCreateError("Client is required.");
-    if (!createStartsAt || !createEndsAt) return setCreateError("Start and end times are required.");
-
-    let startIso: string, endIso: string;
-    try {
-      startIso = toIsoString(createStartsAt);
-      endIso = toIsoString(createEndsAt);
-    } catch {
-      return setCreateError("Please provide valid dates.");
-    }
-
-    if (endIso <= startIso) return setCreateError("End time must be after the start time.");
-    if (!isAuthenticated) return setCreateError("Please log in to schedule appointments.");
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createClientId || !createStartsAt || !createEndsAt) return alert("Completa los campos");
 
     setCreating(true);
     try {
-      await api<AppointmentCreateResponse>("/v1/appointments", {
+      await api("/v1/appointments", {
         method: "POST",
         body: JSON.stringify({
           client_id: Number(createClientId),
-          starts_at: startIso,
-          ends_at: endIso,
-          notes: createNotes.trim() ? createNotes.trim() : null,
-        } satisfies AppointmentCreateBody),
+          starts_at: toIsoString(createStartsAt),
+          ends_at: toIsoString(createEndsAt),
+          notes: createNotes
+        })
       });
-      setCreateSuccess("Appointment scheduled.");
-      resetCreateForm();
-      setRefreshKey((v) => v + 1);
+      setCreateClientId("");
+      setCreateStartsAt("");
+      setCreateEndsAt("");
+      setCreateNotes("");
+      setRefreshKey((k) => k + 1);
+      alert("Cita creada y sincronizada.");
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : String(err));
+      alert("Error creando cita: " + err);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleDelete = async (appointment: Appointment) => {
-    if (!isAuthenticated) return alert("Please log in to delete appointments.");
-    if (!window.confirm("Delete this appointment?")) return;
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Eliminar cita?")) return;
     try {
-      await api<void>(`/v1/appointments/${appointment.id}`, { method: "DELETE" });
-      setRefreshKey((v) => v + 1);
+      await api(`/v1/appointments/${id}`, { method: "DELETE" });
+      setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      alert("Error eliminando: " + err);
     }
   };
 
-  const openEditModal = (appointment: Appointment) => {
-    if (!isAuthenticated) return;
-    setSelectedAppointment(appointment);
-    setEditStartsAt(toDateTimeLocal(appointment.starts_at));
-    setEditEndsAt(toDateTimeLocal(appointment.ends_at));
-    setEditNotes(appointment.notes ?? "");
-    setEditError(null);
-    setEditSuccess(null);
+  const openEdit = (appt: Appointment) => {
+    setSelectedAppointment(appt);
+    setEditStartsAt(toDateTimeLocal(appt.starts_at));
+    setEditEndsAt(toDateTimeLocal(appt.ends_at));
+    setEditNotes(appt.notes || "");
     setEditOpen(true);
   };
 
-  const handleEditSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedAppointment || !isAuthenticated) return;
-
-    setEditError(null);
-    setEditSuccess(null);
-
-    let startIso: string, endIso: string;
-    try {
-      startIso = toIsoString(editStartsAt);
-      endIso = toIsoString(editEndsAt);
-    } catch {
-      return setEditError("Invalid dates.");
-    }
-    if (endIso <= startIso) return setEditError("End time must be after start.");
-
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
     setEditing(true);
     try {
-      await api<AppointmentUpdateResponse>(`/v1/appointments/${selectedAppointment.id}`, {
+      await api(`/v1/appointments/${selectedAppointment.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          starts_at: startIso,
-          ends_at: endIso,
-          notes: editNotes.trim() ? editNotes.trim() : null,
-        } satisfies AppointmentUpdateBody),
+          starts_at: toIsoString(editStartsAt),
+          ends_at: toIsoString(editEndsAt),
+          notes: editNotes
+        })
       });
-      setEditSuccess("Appointment updated.");
       setEditOpen(false);
-      setRefreshKey((v) => v + 1);
+      setRefreshKey((k) => k + 1);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : String(err));
+      alert("Error actualizando: " + err);
     } finally {
       setEditing(false);
     }
   };
 
-  // --- UNIFIED LIST LOGIC ---
-  const unifiedAppointments = useMemo(() => {
-    const list: UnifiedEvent[] = [];
-    const clientLookup = new Map(clients.map((c) => [c.id, c]));
-
-    // 1. Map Local Appointments
-    appointments.forEach((appt) => {
-      const client = clientLookup.get(appt.client_id);
+  const unifiedList = useMemo(() => {
+    const list: any[] = [];
+    appointments.forEach((a) => {
+      const client = clients.find((c) => c.id === a.client_id);
       list.push({
-        id: appt.id,
-        source: "local",
-        title: client ? client.name : `Client #${appt.client_id}`,
+        id: a.id,
+        source: "local" as const,
+        title: client ? client.name : `Cliente #${a.client_id}`,
         subtitle: client?.phone,
-        startsAt: appt.starts_at,
-        endsAt: appt.ends_at,
-        notes: appt.notes || undefined,
-        raw: appt,
+        start: a.starts_at,
+        end: a.ends_at,
+        notes: a.notes,
+        raw: a
       });
     });
-
-    // 2. Map Google Events
-    googleEvents.forEach((evt) => {
-      // Google a veces devuelve 'date' (todo el día) o 'dateTime'
-      const start = evt.start.dateTime || evt.start.date || "";
-      const end = evt.end.dateTime || evt.end.date || "";
-      
+    googleEvents.forEach((g) => {
+      const start = g.start.dateTime || g.start.date;
+      const end = g.end.dateTime || g.end.date;
       list.push({
-        id: evt.id,
-        source: "google",
-        title: evt.summary || "(No Title)",
-        subtitle: "Google Event",
-        startsAt: start,
-        endsAt: end,
-        notes: evt.description,
-        raw: evt, // Guardamos el evento original
+        id: g.id,
+        source: "google" as const,
+        title: g.summary || "(Sin título)",
+        subtitle: "Google Calendar",
+        start,
+        end,
+        notes: g.description,
+        raw: g
       });
     });
-
-    // 3. Sort by Date
-    return list.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+    return list.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   }, [appointments, googleEvents, clients]);
 
-  // --- RENDER TABLE ---
-  const appointmentRows = useMemo(() => {
-    if (appointmentsLoading) return <p className="py-6 text-sm text-neutral-400">Loading appointments…</p>;
-    if (appointmentsError) return <p className="py-6 text-sm text-red-400">{appointmentsError}</p>;
-    if (unifiedAppointments.length === 0) return <p className="py-6 text-sm text-neutral-400">No appointments scheduled.</p>;
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Agenda</h1>
+          <p className="text-neutral-400 text-sm">Visualiza tus citas locales y eventos de Google.</p>
+        </div>
+        {googleLoading && <span className="text-xs text-blue-400 animate-pulse">Sincronizando Google...</span>}
+      </div>
 
-    return (
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-neutral-800 text-xs uppercase text-neutral-500">
+      <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg overflow-hidden">
+        <table className="min-w-full text-left text-sm text-neutral-300">
+          <thead className="bg-neutral-900 border-b border-neutral-800 text-xs uppercase font-medium text-neutral-500">
             <tr>
-              <th className="px-3 py-2">Cliente / Evento</th>
-              <th className="px-3 py-2">Inicio</th>
-              <th className="px-3 py-2">Fin</th>
-              <th className="px-3 py-2">Notas</th>
-              <th className="px-3 py-2 text-right">Acciones</th>
+              <th className="px-4 py-3">Origen</th>
+              <th className="px-4 py-3">Evento / Cliente</th>
+              <th className="px-4 py-3">Inicio</th>
+              <th className="px-4 py-3">Fin</th>
+              <th className="px-4 py-3">Notas</th>
+              <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
-          <tbody>
-            {unifiedAppointments.map((item) => (
-              <tr
-                key={`${item.source}-${item.id}`}
-                className={`border-b border-neutral-900 ${item.source === "google" ? "bg-blue-900/10" : ""}`}
-              >
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    {item.source === "google" ? (
-                      <span className="flex items-center gap-1 text-blue-400 text-xs" title="Evento de Google">
-                        <Lock className="w-3 h-3" /> Google Calendar
-                      </span>
-                    ) : null}
-                    <div>
-                      <p className={item.source === "google" ? "font-medium text-blue-200" : ""}>{item.title}</p>
-                      {item.subtitle ? <p className="text-xs text-neutral-500">{item.subtitle}</p> : null}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-2">{new Date(item.startsAt).toLocaleString()}</td>
-                <td className="px-3 py-2">{new Date(item.endsAt).toLocaleString()}</td>
-                <td className="px-3 py-2 max-w-xs truncate">
-                  {item.notes ? (
-                    <span className="text-neutral-200" title={item.notes}>
-                      {item.notes}
-                    </span>
-                  ) : (
-                    <span className="text-neutral-500">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {item.source === "local" && isAuthenticated ? (
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="secondary" onClick={() => openEditModal(item.raw as Appointment)}>
-                        Edit
-                      </Button>
-                      <Button type="button" variant="ghost" onClick={() => handleDelete(item.raw as Appointment)}>
-                        Delete
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className="flex items-center justify-end gap-1 text-xs text-neutral-600">
-                      <Lock className="w-3 h-3" /> Externo
-                    </span>
-                  )}
+          <tbody className="divide-y divide-neutral-800">
+            {unifiedList.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
+                  No hay citas programadas.
                 </td>
               </tr>
-            ))}
+            ) : (
+              unifiedList.map((item) => (
+                <tr key={item.id} className={item.source === "google" ? "bg-blue-950/10" : "hover:bg-neutral-800/30"}>
+                  <td className="px-4 py-3">
+                    {item.source === "google" ? (
+                      <span className="inline-flex items-center gap-1 text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded text-xs border border-blue-400/20">
+                        <CalendarIcon className="w-3 h-3" /> Google
+                      </span>
+                    ) : (
+                      <span className="text-xs text-neutral-500">Local</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-white">
+                    {item.title}
+                    <div className="text-xs text-neutral-500 font-normal">{item.subtitle}</div>
+                  </td>
+                  <td className="px-4 py-3">{new Date(item.start).toLocaleString()}</td>
+                  <td className="px-4 py-3">{new Date(item.end).toLocaleString()}</td>
+                  <td className="px-4 py-3 max-w-xs truncate text-neutral-400" title={item.notes}>
+                    {item.notes || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {item.source === "local" ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openEdit(item.raw)} className="text-neutral-400 hover:text-white transition">
+                          Editar
+                        </button>
+                        <button onClick={() => handleDelete(item.id)} className="text-red-400 hover:text-red-300 transition">
+                          Borrar
+                        </button>
+                      </div>
+                    ) : (
+                      <Lock className="w-4 h-4 text-neutral-600 ml-auto" title="Gestionar en Google Calendar" />
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
-    );
-  }, [unifiedAppointments, appointmentsLoading, appointmentsError, isAuthenticated]);
 
-  return (
-    <section className="space-y-6">
-      <div className="card space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
+        <h2 className="text-lg font-semibold text-white mb-4">Nueva Cita</h2>
+        <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-3 items-end">
           <div>
-            <h1 className="text-xl font-semibold">Appointments</h1>
-            <p className="text-sm text-neutral-400">Upcoming schedules across all clients & calendars.</p>
+            <label className="block text-xs text-neutral-400 mb-1">Cliente</label>
+            <Select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} required className="w-full bg-neutral-950 border-neutral-700">
+              <option value="">Seleccionar...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            {googleError ? <span className="text-red-400">{googleError}</span> : null}
-            {googleLoading ? <span className="text-blue-400 animate-pulse">Syncing Google Calendar...</span> : null}
-            {hasGoogleToken ? (
-              <button
-                type="button"
-                className="rounded border border-neutral-700 px-3 py-1 text-neutral-200 hover:border-neutral-500"
-                onClick={() => setGoogleRefreshKey((v) => v + 1)}
-              >
-                Refrescar Google
-              </button>
-            ) : null}
+          <div>
+            <label className="block text-xs text-neutral-400 mb-1">Inicio</label>
+            <Input
+              type="datetime-local"
+              value={createStartsAt}
+              onChange={(e) => setCreateStartsAt(e.target.value)}
+              required
+              className="bg-neutral-950 border-neutral-700"
+            />
           </div>
-        </div>
-        {appointmentRows}
-      </div>
-
-      <div className="card space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Schedule appointment</h2>
-          <p className="text-sm text-neutral-400">Pick a client, timeframe, and optional notes.</p>
-        </div>
-
-        <form onSubmit={handleCreate} className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="flex flex-col gap-1 text-sm text-neutral-300 md:col-span-1">
-              Client
-              <Select value={createClientId} onChange={(event) => setCreateClientId(event.target.value)} required>
-                <option value="">Select client…</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name} ({client.phone})
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm text-neutral-300">
-              Starts at
-              <Input type="datetime-local" value={createStartsAt} onChange={(event) => setCreateStartsAt(event.target.value)} required />
-            </label>
-            <label className="flex flex-col gap-1 text-sm text-neutral-300">
-              Ends at
-              <Input type="datetime-local" value={createEndsAt} onChange={(event) => setCreateEndsAt(event.target.value)} required />
-            </label>
+          <div>
+            <label className="block text-xs text-neutral-400 mb-1">Fin</label>
+            <Input
+              type="datetime-local"
+              value={createEndsAt}
+              onChange={(e) => setCreateEndsAt(e.target.value)}
+              required
+              className="bg-neutral-950 border-neutral-700"
+            />
           </div>
-          <label className="flex flex-col gap-1 text-sm text-neutral-300">
-            Notes
-            <Input value={createNotes} onChange={(event) => setCreateNotes(event.target.value)} placeholder="Optional notes…" />
-          </label>
-
-          {clientsError ? <p className="text-sm text-red-400">{clientsError}</p> : null}
-          {createError ? <p className="text-sm text-red-400">{createError}</p> : null}
-          {createSuccess ? <p className="text-sm text-emerald-400">{createSuccess}</p> : null}
-
-          <Button type="submit" loading={creating} className="w-full md:w-auto" disabled={!isAuthenticated || clients.length === 0}>
-            {isAuthenticated ? "Create appointment" : "Login required"}
-          </Button>
+          <div className="md:col-span-3">
+            <label className="block text-xs text-neutral-400 mb-1">Notas</label>
+            <Input
+              value={createNotes}
+              onChange={(e) => setCreateNotes(e.target.value)}
+              placeholder="Detalles..."
+              className="bg-neutral-950 border-neutral-700"
+            />
+          </div>
+          <div className="md:col-span-3 flex justify-end">
+            <Button type="submit" loading={creating} disabled={!token} className="bg-blue-600 hover:bg-blue-500 text-white">
+              Agendar Cita
+            </Button>
+          </div>
         </form>
       </div>
 
-      {!isAuthenticated ? <p className="text-xs text-neutral-500">Sign in to schedule, edit, or delete appointments.</p> : null}
-
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit appointment">
-        <form onSubmit={handleEditSubmit} className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm text-neutral-300">
-              Starts at
-              <Input type="datetime-local" value={editStartsAt} onChange={(event) => setEditStartsAt(event.target.value)} required />
-            </label>
-            <label className="flex flex-col gap-1 text-sm text-neutral-300">
-              Ends at
-              <Input type="datetime-local" value={editEndsAt} onChange={(event) => setEditEndsAt(event.target.value)} required />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1 text-sm text-neutral-300">
-            Notes
-            <Input value={editNotes} onChange={(event) => setEditNotes(event.target.value)} placeholder="Optional notes…" />
-          </label>
-          {editError ? <p className="text-sm text-red-400">{editError}</p> : null}
-          {editSuccess ? <p className="text-sm text-emerald-400">{editSuccess}</p> : null}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar Cita">
+        <form onSubmit={handleEdit} className="space-y-4">
+          <Input
+            type="datetime-local"
+            value={editStartsAt}
+            onChange={(e) => setEditStartsAt(e.target.value)}
+            required
+          />
+          <Input
+            type="datetime-local"
+            value={editEndsAt}
+            onChange={(e) => setEditEndsAt(e.target.value)}
+            required
+          />
+          <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setEditOpen(false)}>
-              Cancel
+              Cancelar
             </Button>
-            <Button type="submit" loading={editing} disabled={!isAuthenticated}>
-              Save changes
+            <Button type="submit" loading={editing}>
+              Guardar
             </Button>
           </div>
         </form>
       </Modal>
-    </section>
+    </div>
   );
 }

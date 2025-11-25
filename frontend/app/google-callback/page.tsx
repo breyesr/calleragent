@@ -1,51 +1,42 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useToken } from '@/lib/useToken';
 
 export default function GoogleCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState('Procesando autenticación con Google...');
+  const { token } = useToken();
+  const [status, setStatus] = useState('Verificando sesión...');
 
   useEffect(() => {
     const code = searchParams.get('code');
-    if (!code) {
-      setStatus('Error: No se recibió código de autorización.');
-      return;
-    }
+    if (!code) return setStatus('Falta código');
+    if (!token) return setStatus('Inicia sesión para continuar...');
 
-    const exchangeCode = async () => {
+    const exchange = async () => {
+      setStatus('Vinculando cuenta...');
       try {
-        const redirectUri = window.location.origin + '/google-callback';
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const redirectUri = window.location.origin + '/google-callback';
 
-        const res = await fetch(`${apiUrl}/v1/calendar/callback?code=${code}&redirect_uri=${redirectUri}`);
+        const res = await fetch(`${apiUrl}/v1/calendar/callback?code=${code}&redirect_uri=${redirectUri}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-        if (!res.ok) throw new Error('Falló el intercambio de token');
-
-        const data = await res.json();
-
-        if (data.access_token) {
-          localStorage.setItem('google_access_token', data.access_token);
-          setStatus('¡Conexión exitosa! Redirigiendo...');
-          setTimeout(() => router.push('/dashboard/settings/calendar'), 1500);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Error en servidor');
         }
-      } catch (error) {
-        console.error(error);
-        setStatus('Error conectando. Revisa la consola/logs.');
+
+        setStatus('¡Éxito! Redirigiendo...');
+        setTimeout(() => router.push('/dashboard/settings/calendar'), 1000);
+      } catch (e) {
+        setStatus(`Error: ${e}`);
       }
     };
+    exchange();
+  }, [searchParams, router, token]);
 
-    exchangeCode();
-  }, [searchParams, router]);
-
-  return (
-    <div className="flex h-screen w-full items-center justify-center bg-gray-50">
-      <div className="rounded-lg bg-white p-8 shadow-md text-center">
-        <h2 className="text-xl font-bold mb-4">Integración Google Calendar</h2>
-        <p className="text-gray-600 animate-pulse">{status}</p>
-      </div>
-    </div>
-  );
+  return <div className="flex h-screen items-center justify-center text-white">{status}</div>;
 }

@@ -18,6 +18,7 @@ dist/
 build/
 coverage/
 .cache/
+DB-CSV/
 
 # Build/cache
 frontend/tmp/

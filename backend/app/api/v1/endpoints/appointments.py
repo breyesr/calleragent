@@ -1,6 +1,10 @@
 from datetime import datetime
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,8 +13,60 @@ from ..schemas.appointment import AppointmentCreate, AppointmentOut, Appointment
 from app.models.appointment import Appointment
 from app.models.client import Client
 from app.models.user import User
+from app.models.google_credential import GoogleCredential
 
 router = APIRouter()
+GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
+
+
+def _get_google_credential(db: Session, user_id: int) -> GoogleCredential | None:
+    return db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
+
+
+def _build_user_credentials(db: Session, user_id: int) -> tuple[Credentials | None, GoogleCredential | None]:
+    cred = _get_google_credential(db, user_id)
+    if not cred or (not cred.access_token and not cred.refresh_token):
+        return None, cred
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    return (
+        Credentials(
+            token=cred.access_token,
+            refresh_token=cred.refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=[GOOGLE_CALENDAR_SCOPE],
+        ),
+        cred,
+    )
+
+
+def _sync_google_event(db: Session, user: User, appointment: Appointment) -> None:
+    creds, cred = _build_user_credentials(db, user.id)
+    if not creds or not cred:
+        return
+    try:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            cred.access_token = creds.token
+            db.add(cred)
+            db.commit()
+            db.refresh(cred)
+
+        service = build("calendar", "v3", credentials=creds)
+        client = db.get(Client, appointment.client_id)
+        summary = f"Cita: {client.name}" if client else "Cita programada"
+        event_body = {
+            "summary": summary,
+            "description": appointment.notes or "Agendado desde AgentCaller",
+            "start": {"dateTime": appointment.starts_at.isoformat(), "timeZone": "UTC"},
+            "end": {"dateTime": appointment.ends_at.isoformat(), "timeZone": "UTC"},
+        }
+        service.events().insert(calendarId=cred.calendar_id or "primary", body=event_body).execute()
+        print("✅ Evento creado en Google Calendar")
+    except Exception as exc:
+        print(f"⚠️ Error sincronizando con Google: {exc}")
 
 
 @router.get("", response_model=list[AppointmentOut])
@@ -35,7 +91,7 @@ def list_appointments(
 def create_appointment(
     payload: AppointmentCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AppointmentOut:
     _ensure_client_exists(db, payload.client_id)
     _validate_time_range(payload.starts_at, payload.ends_at)
@@ -44,6 +100,8 @@ def create_appointment(
     db.add(appointment)
     db.commit()
     db.refresh(appointment)
+
+    _sync_google_event(db, current_user, appointment)
     return appointment
 
 
