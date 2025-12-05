@@ -1,236 +1,204 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { Calendar, CheckCircle, XCircle, Link, Globe } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { Plus, Trash2, Check, RefreshCw, Calendar as CalIcon, LogOut, AlertTriangle, Globe } from 'lucide-react';
+import { useToken } from '@/lib/useToken';
 import Button from '@/components/Button';
 import Select from '@/components/Select';
-import { useToken } from '@/lib/useToken';
+import Input from '@/components/Input';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+type AppointmentType = { id: string; name: string; duration: number; description?: string; };
+type CalendarOption = { id: string; summary: string; primary: boolean; };
+type SettingsForm = { schedulingMethod: string; selectedCalendarId: string; timezone: string; bufferTime: number; };
 
-type CalendarSettings = {
-    calendar_id: string;
-    timezone: string;
-};
-
-type GoogleCalendar = {
-    id: string;
-    summary: string;
-};
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function CalendarSettingsPage() {
-    const { token } = useToken();
-    const router = useRouter();
-    const [loading, setLoading] = useState(true);
-    const [isConnected, setIsConnected] = useState(false);
-    const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
-    const [settings, setSettings] = useState<CalendarSettings>({ calendar_id: '', timezone: 'America/Mexico_City' });
-    const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
+  const { token } = useToken();
+  const [isConnected, setIsConnected] = useState(false);
+  const [calendars, setCalendars] = useState<CalendarOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingAction, setLoadingAction] = useState(false);
 
-    const redirectUri = typeof window !== 'undefined' ? `${window.location.origin}/google-callback` : '';
-    const isReady = useMemo(() => !!token, [token]);
+  const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[]>([]);
+  const [newType, setNewType] = useState<Partial<AppointmentType>>({ name: '', duration: 30 });
 
-    useEffect(() => {
-        if (!isReady) return;
+  const { register, handleSubmit, setValue } = useForm<SettingsForm>({
+    defaultValues: { timezone: 'America/Mexico_City', schedulingMethod: 'google', bufferTime: 15 }
+  });
 
-        async function loadData() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch(`${apiUrl}/v1/calendar/calendars`, {
+  useEffect(() => {
+    if (!token) return;
+    const init = async () => {
+        setLoading(true);
+        try {
+            const calRes = await fetch(`${API_URL}/v1/calendar/calendars`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (calRes.ok) {
+                const calData = await calRes.json();
+                setCalendars(calData.calendars || []);
+                setIsConnected(true);
+
+                const credsRes = await fetch(`${API_URL}/v1/calendar/credentials`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    setCalendars(data.calendars || []);
-                    setIsConnected(true);
-
-                    const currentCredsRes = await fetch(`${apiUrl}/v1/calendar/credentials`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (currentCredsRes.ok) {
-                        const credsData = await currentCredsRes.json();
-                        setSettings(s => ({ ...s, calendar_id: credsData.calendar_id || (data.calendars[0]?.id || '') }));
-                    }
-
-                } else {
-                    setIsConnected(false);
-                    setCalendars([]);
+                if (credsRes.ok) {
+                    const creds = await credsRes.json();
+                    if (creds.calendar_id) setValue('selectedCalendarId', creds.calendar_id);
                 }
-            } catch (err) {
-                console.error("Error loading calendar data:", err);
+            } else {
                 setIsConnected(false);
-                setError("Error al cargar datos del calendario.");
-            } finally {
-                setLoading(false);
             }
-        }
-        loadData();
-    }, [isReady, token, redirectUri]);
-
-    const handleConnect = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`${apiUrl}/v1/calendar/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                router.push(data.auth_url);
-            } else {
-                setError("No se pudo obtener la URL de Google.");
-            }
-        } catch (err) {
-            setError("Error de red.");
-        } finally {
-            setLoading(false);
-        }
+        } catch (e) { console.error(e); setIsConnected(false); }
+        finally { setLoading(false); }
     };
+    init();
+  }, [token, setValue]);
 
-    const handleDisconnect = async () => {
-        if (!isConnected) return;
-        setLoading(true);
-        setError(null);
-        setSuccess(null);
+  const onConnect = async () => {
+    setLoadingAction(true);
+    try {
+        const redirect = window.location.origin + '/google-callback';
+        const res = await fetch(`${API_URL}/v1/calendar/auth-url?redirect_uri=${redirect}`);
+        const data = await res.json();
+        if (data.auth_url) window.location.href = data.auth_url;
+    } catch (e) { alert("Error de conexión"); }
+    finally { setLoadingAction(false); }
+  };
 
-        try {
-            const res = await fetch(`${apiUrl}/v1/calendar/connection`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+  const onDisconnect = async () => {
+    if (!confirm("¿Confirmas desconectar? Se borrarán las credenciales y se detendrá la sincronización.")) return;
+    setLoadingAction(true);
+    try {
+        const res = await fetch(`${API_URL}/v1/calendar/connection`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-            if (res.ok) {
-                setIsConnected(false);
-                setCalendars([]);
-                setSettings(s => ({ ...s, calendar_id: '' }));
-                setSuccess('Desconexión exitosa. Debes volver a conectar.');
-                router.refresh();
-            } else {
-                const errorData = await res.json();
-                setError(errorData.detail || 'Fallo al desconectar.');
-            }
-        } catch (err) {
-            setError('Error de red al intentar desconectar.');
-        } finally {
-            setLoading(false);
+        if (res.ok) {
+            setIsConnected(false);
+            setCalendars([]);
+            setValue('selectedCalendarId', '');
+            alert("Desconectado correctamente.");
+        } else {
+            const err = await res.json();
+            alert("Error al desconectar: " + (err.detail || "Desconocido"));
         }
-    };
+    } catch (e) { alert("Error de red al desconectar"); }
+    finally { setLoadingAction(false); }
+  };
 
-    const handleSaveSettings = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!isConnected || !settings.calendar_id) return;
+  const onSave = async (data: SettingsForm) => {
+    if (!isConnected) return;
+    try {
+        await fetch(`${API_URL}/v1/calendar/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ calendar_id: data.selectedCalendarId, timezone: data.timezone })
+        });
+        alert("Configuración guardada.");
+    } catch (e) { alert("Error guardando"); }
+  };
 
-        setLoading(true);
-        setError(null);
-        setSuccess(null);
+  const addAppointmentType = () => {
+    if (!newType.name) return;
+    setAppointmentTypes([...appointmentTypes, { id: Date.now().toString(), name: newType.name!, duration: newType.duration || 30, description: newType.description }]);
+    setNewType({ name: '', duration: 30, description: '' });
+  };
+  const removeType = (id: string) => setAppointmentTypes(appointmentTypes.filter(t => t.id !== id));
 
-        try {
-            const res = await fetch(`${apiUrl}/v1/calendar/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ calendar_id: settings.calendar_id, timezone: settings.timezone })
-            });
+  if (loading && !calendars.length && !isConnected) return <div className="p-10 text-neutral-400">Cargando...</div>;
 
-            if (res.ok) {
-                setSuccess("Configuración de calendario guardada correctamente.");
-            } else {
-                const errorData = await res.json();
-                setError(errorData.detail || 'Fallo al guardar la configuración.');
-            }
-        } catch (err) {
-            setError('Error de red al intentar guardar.');
-        } finally {
-            setLoading(false);
-        }
-    };
+  return (
+    <div className="p-8 max-w-4xl mx-auto space-y-8">
+        <h1 className="text-2xl font-bold text-white">Configuración de Calendario</h1>
 
-    if (!isReady || (loading && !calendars.length && isConnected)) {
-        return <div className="p-6 text-neutral-500">Cargando...</div>;
-    }
-
-    return (
-        <div className="p-6 max-w-4xl mx-auto space-y-8">
-            <h1 className="text-2xl font-bold flex items-center gap-2"><Calendar className="h-6 w-6 text-blue-500" /> Configuración de Google Calendar</h1>
-
-            {error && <div className="p-4 bg-red-900/50 text-red-400 rounded-lg">{error}</div>}
-            {success && <div className="p-4 bg-green-900/50 text-green-400 rounded-lg">{success}</div>}
-
-            <div className="card space-y-4">
-                <h2 className="text-xl font-semibold">Estado de la Conexión</h2>
-                <div className="flex items-center gap-4">
-                    {isConnected ? (
-                        <CheckCircle className="h-6 w-6 text-green-500" />
-                    ) : (
-                        <XCircle className="h-6 w-6 text-red-500" />
+        <div className="bg-neutral-900 p-6 rounded-lg border border-neutral-800 space-y-6">
+            <div>
+                <label className="block text-sm font-medium text-neutral-300 mb-2">Estado de Conexión</label>
+                <div className="flex items-center justify-between p-4 bg-neutral-950 rounded border border-neutral-800">
+                    <div className="flex items-center gap-3">
+                        {isConnected ? <Check className="text-green-500"/> : <AlertTriangle className="text-yellow-500"/>}
+                        <div>
+                            <p className="text-white font-medium">{isConnected ? "Cuenta Conectada" : "Sin conexión"}</p>
+                            <p className="text-xs text-neutral-500">{isConnected ? "Sincronización activa" : "Conecta tu cuenta para agendar"}</p>
+                        </div>
+                    </div>
+                    {!isConnected && (
+                        <Button onClick={onConnect} loading={loadingAction} className="bg-blue-600 hover:bg-blue-500 text-white">
+                            <RefreshCw className="w-4 h-4 mr-2"/> Conectar Google
+                        </Button>
                     )}
-                    <p className={`font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                        {isConnected ? 'Conectado a Google Calendar' : 'Desconectado de Google Calendar'}
-                    </p>
                 </div>
-
-                {isConnected ? (
-                    <Button onClick={handleDisconnect} variant="secondary" loading={loading} disabled={loading}>
-                        <Link className="h-4 w-4 mr-2 transform rotate-45" /> Desconectar Cuenta
-                    </Button>
-                ) : (
-                    <Button onClick={handleConnect} loading={loading} disabled={loading}>
-                        Conectar Google Calendar
-                    </Button>
-                )}
             </div>
 
             {isConnected && (
-                <form onSubmit={handleSaveSettings} className="card space-y-6">
-                    <h2 className="text-xl font-semibold">Preferencias de Agendamiento</h2>
-
-                    <div>
-                        <label htmlFor="calendar-select" className="block text-sm font-medium text-neutral-300 mb-2">
-                            Seleccionar Calendario para Agendar
-                        </label>
-                        <Select
-                            id="calendar-select"
-                            value={settings.calendar_id}
-                            onChange={(e) => setSettings(s => ({ ...s, calendar_id: e.target.value }))}
-                            required
-                        >
-                            <option value="" disabled>Selecciona un calendario...</option>
-                            {calendars.map(cal => (
-                                <option key={cal.id} value={cal.id}>
-                                    {cal.summary}
-                                </option>
-                            ))}
-                        </Select>
-                        <p className="text-xs text-neutral-500 mt-1">Aquí se crearán las nuevas citas generadas por el asistente.</p>
+                <form onSubmit={handleSubmit(onSave)} className="space-y-6 pt-4 border-t border-neutral-800">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-2">Calendario Destino</label>
+                            <Select {...register('selectedCalendarId')} className="bg-neutral-950 border-neutral-700 w-full text-white">
+                                {calendars.map(c => (
+                                    <option key={c.id} value={c.id}>{c.summary} {c.primary ? '(Principal)' : ''}</option>
+                                ))}
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-2 flex items-center gap-2">
+                                <Globe className="w-4 h-4"/> Zona Horaria
+                            </label>
+                            <Select {...register('timezone')} className="bg-neutral-950 border-neutral-700 w-full text-white">
+                                <option value="America/Mexico_City">CDMX (GMT-6)</option>
+                                <option value="UTC">UTC</option>
+                            </Select>
+                        </div>
                     </div>
-
-                    <div>
-                        <label htmlFor="timezone-select" className="block text-sm font-medium text-neutral-300 mb-2 flex items-center gap-1">
-                            <Globe className='h-4 w-4' /> Zona Horaria
-                        </label>
-                        <Select
-                            id="timezone-select"
-                            value={settings.timezone}
-                            onChange={(e) => setSettings(s => ({ ...s, timezone: e.target.value }))}
-                            required
-                        >
-                            <option value="America/Mexico_City">America/Mexico_City (GMT-6)</option>
-                            <option value="America/Bogota">America/Bogota (GMT-5)</option>
-                            <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires (GMT-3)</option>
-                            <option value="UTC">UTC</option>
-                        </Select>
-                        <p className="text-xs text-neutral-500 mt-1">Asegúrate que coincida con tu Google Calendar.</p>
+                    <div className="flex justify-end">
+                        <Button type="submit">Guardar Preferencias</Button>
                     </div>
-
-                    <Button type="submit" loading={loading} disabled={!settings.calendar_id || loading}>
-                        Guardar Configuración
-                    </Button>
                 </form>
             )}
         </div>
-    );
+
+        <div className="bg-neutral-900 p-6 rounded-lg border border-neutral-800 space-y-4">
+            <h3 className="text-lg font-medium text-white">Tipos de Servicio</h3>
+            <div className="space-y-2">
+                {appointmentTypes.map(type => (
+                    <div key={type.id} className="flex justify-between items-center p-3 bg-neutral-950 rounded border border-neutral-800">
+                        <span className="text-white">{type.name} ({type.duration} min)</span>
+                        <button onClick={() => removeType(type.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                ))}
+                {appointmentTypes.length === 0 && <p className="text-neutral-500 text-sm italic">No hay servicios configurados.</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2">
+                <Input placeholder="Nombre (ej: Consulta)" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="bg-neutral-950 border-neutral-700"/>
+                <Input type="number" placeholder="Minutos" value={newType.duration} onChange={e => setNewType({...newType, duration: parseInt(e.target.value)})} className="bg-neutral-950 border-neutral-700"/>
+                <Button onClick={addAppointmentType} disabled={!newType.name} variant="secondary"><Plus className="w-4 h-4"/> Agregar</Button>
+            </div>
+        </div>
+
+        {isConnected && (
+            <div className="bg-red-950/20 border border-red-900/30 p-6 rounded-lg flex justify-between items-center">
+                <div>
+                    <h3 className="text-red-500 font-medium flex items-center gap-2">
+                        <AlertTriangle className="w-5 h-5"/> Zona de Peligro
+                    </h3>
+                    <p className="text-sm text-red-400/70 mt-1">Desvincular tu cuenta detendrá la sincronización de citas.</p>
+                </div>
+                <button
+                    onClick={onDisconnect}
+                    disabled={loadingAction}
+                    className="px-4 py-2 border border-red-800 text-red-500 hover:bg-red-900/20 rounded transition text-sm font-medium flex items-center gap-2"
+                >
+                    {loadingAction ? "Desconectando..." : <><LogOut className="w-4 h-4"/> Desconectar Cuenta</>}
+                </button>
+            </div>
+        )}
+    </div>
+  );
 }

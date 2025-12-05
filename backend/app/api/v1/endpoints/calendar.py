@@ -8,13 +8,14 @@ import datetime
 from typing import Optional
 from pydantic import BaseModel
 
-from app.api import deps
+from app.api.v1 import deps  # FIX IMPORTANTE
 from app.models.user import User
 from app.models.google_credential import GoogleCredential
 
 router = APIRouter()
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+
 
 def get_credential_record(db: Session, user_id: int):
     return db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
@@ -32,8 +33,8 @@ def get_google_creds_with_refresh(db: Session, user_id: int) -> Optional[Credent
         client_id=os.getenv("GOOGLE_CLIENT_ID"),
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
     )
-
     return creds
+
 
 @router.get("/auth-url")
 def get_auth_url(redirect_uri: str = Query(...)):
@@ -56,6 +57,7 @@ def get_auth_url(redirect_uri: str = Query(...)):
     )
     auth_url, _ = flow.authorization_url(access_type='offline', include_granted_scopes='true', prompt='consent')
     return {"auth_url": auth_url}
+
 
 @router.get("/callback")
 def exchange_code(code: str, redirect_uri: str, db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
@@ -92,6 +94,7 @@ def exchange_code(code: str, redirect_uri: str, db: Session = Depends(deps.get_d
         print(f"Callback error: {e}")
         raise HTTPException(400, f"Error Google: {e}")
 
+
 @router.get("/calendars")
 def list_calendars(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
     creds = get_google_creds_with_refresh(db, current_user.id)
@@ -104,6 +107,7 @@ def list_calendars(db: Session = Depends(deps.get_db), current_user: User = Depe
         return {"calendars": [{'id': c['id'], 'summary': c['summary'], 'primary': c.get('primary', False)} for c in items]}
     except Exception as e:
         raise HTTPException(401, str(e))
+
 
 class CalendarSettingsUpdate(BaseModel):
     calendar_id: str
@@ -127,6 +131,7 @@ def update_settings(payload: CalendarSettingsUpdate, db: Session = Depends(deps.
     db.commit()
     return {"msg": "Calendario actualizado"}
 
+
 @router.delete("/connection")
 def disconnect_google(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
     """Borra las credenciales de la base de datos."""
@@ -135,6 +140,7 @@ def disconnect_google(db: Session = Depends(deps.get_db), current_user: User = D
         db.delete(cred)
         db.commit()
     return {"msg": "Desconectado"}
+
 
 @router.get("/events")
 def list_events(db: Session = Depends(deps.get_db), current_user: User = Depends(deps.get_current_user)):
@@ -146,8 +152,8 @@ def list_events(db: Session = Depends(deps.get_db), current_user: User = Depends
         creds = get_google_creds_with_refresh(db, current_user.id)
         if not creds:
             return {"count": 0, "events": []}
-        service = build('calendar', 'v3', credentials=creds)
 
+        service = build('calendar', 'v3', credentials=creds)
         target_calendar = cred.calendar_id or 'primary'
 
         events_result = service.events().list(
@@ -174,28 +180,26 @@ def update_google_event(
     summary: Optional[str] = Query(None),
     notes: Optional[str] = Query(None),
 ):
-    """Modifica un evento existente en Google Calendar usando las credenciales almacenadas."""
     creds = get_google_creds_with_refresh(db, current_user.id)
     cred_record = get_credential_record(db, current_user.id)
     if not creds or not cred_record:
-        raise HTTPException(401, "No conectado o token expirado")
-
-    calendar_id = cred_record.calendar_id or 'primary'
+        raise HTTPException(401, "No conectado")
 
     try:
         service = build('calendar', 'v3', credentials=creds)
+        calendar_id = cred_record.calendar_id or 'primary'
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
 
         if starts_at:
-            event["start"]["dateTime"] = starts_at.isoformat()
+            event['start']['dateTime'] = starts_at.isoformat()
         if ends_at:
-            event["end"]["dateTime"] = ends_at.isoformat()
+            event['end']['dateTime'] = ends_at.isoformat()
         if summary:
-            event["summary"] = summary
+            event['summary'] = summary
         if notes:
-            event["description"] = notes
+            event['description'] = notes
 
         updated_event = service.events().update(calendarId=calendar_id, eventId=event_id, body=event).execute()
-        return {"msg": "Evento actualizado en Google", "event_id": updated_event.get("id")}
-    except Exception as exc:
-        raise HTTPException(400, f"Error al actualizar evento de Google: {exc}")
+        return {"msg": "Evento actualizado", "event_id": updated_event.get("id")}
+    except Exception as e:
+        raise HTTPException(400, f"Error update: {e}")
