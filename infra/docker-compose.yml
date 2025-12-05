@@ -40,12 +40,15 @@ services:
       - ../backend/.env.example
       - ./.env
     environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # override DB/Redis to point at Compose services
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       APP_ENV: docker
       API_V1_PREFIX: /v1
       SECRET_KEY: change-this-in-prod
+      FRONTEND_PORT: ${FRONTEND_PORT:-3002}
     depends_on:
       db:
         condition: service_healthy
@@ -78,18 +81,19 @@ services:
       - ../backend:/app
     working_dir: /app
 
-  frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    container_name: agentcaller-frontend
-    restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-    depends_on:
-      - backend
-    ports:
-      - "3002:3002"
+  # frontend:
+  #   build:
+  #     context: ../frontend
+  #     dockerfile: Dockerfile
+  #   container_name: agentcaller-frontend
+  #   restart: unless-stopped
+  #   environment:
+  #     NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+  #     PORT: ${FRONTEND_PORT:-3002}
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "${FRONTEND_PORT:-3002}:${FRONTEND_PORT:-3002}"
 
 volumes:
   db_data:
