@@ -93,14 +93,35 @@ export default function CalendarSettingsPage() {
 
   const onSave = async (data: SettingsForm) => {
     if (!isConnected) return;
+
+    console.log('[DEBUG] Form data:', data);
+    console.log('[DEBUG] Sending calendar_id:', data.selectedCalendarId);
+
     try {
-        await fetch(`${API_URL}/v1/calendar/settings`, {
+        const payload = { calendar_id: data.selectedCalendarId, timezone: data.timezone };
+        console.log('[DEBUG] Payload:', JSON.stringify(payload));
+
+        const res = await fetch(`${API_URL}/v1/calendar/settings`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ calendar_id: data.selectedCalendarId, timezone: data.timezone })
+            body: JSON.stringify(payload)
         });
-        alert("Configuración guardada.");
-    } catch (e) { alert("Error guardando"); }
+
+        console.log('[DEBUG] Response status:', res.status);
+
+        if (res.ok) {
+            const responseData = await res.json();
+            console.log('[DEBUG] Response data:', responseData);
+            alert("Configuración guardada correctamente.");
+        } else {
+            const err = await res.json();
+            console.error('[DEBUG] Error response:', err);
+            alert("Error al guardar: " + (err.detail || "Desconocido"));
+        }
+    } catch (e) {
+        console.error("Error guardando:", e);
+        alert("Error de red al guardar");
+    }
   };
 
   const addAppointmentType = () => {

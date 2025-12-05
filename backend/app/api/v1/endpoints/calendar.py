@@ -127,8 +127,13 @@ def update_settings(payload: CalendarSettingsUpdate, db: Session = Depends(deps.
     cred = get_credential_record(db, current_user.id)
     if not cred:
         raise HTTPException(404, "No conectado")
+
+    print(f"[DEBUG] Updating calendar_id from '{cred.calendar_id}' to '{payload.calendar_id}'")
     cred.calendar_id = payload.calendar_id
     db.commit()
+    db.refresh(cred)
+    print(f"[DEBUG] After commit, calendar_id is: '{cred.calendar_id}'")
+
     return {"msg": "Calendario actualizado"}
 
 
