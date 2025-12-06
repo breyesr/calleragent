@@ -139,27 +139,67 @@ export default function AppointmentsPage() {
     }
   };
 
+  const [editingGoogle, setEditingGoogle] = useState(false);
+  const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<GoogleEvent | null>(null);
+
   const openEdit = (appt: Appointment) => {
     setSelectedAppointment(appt);
     setEditStartsAt(toDateTimeLocal(appt.starts_at));
     setEditEndsAt(toDateTimeLocal(appt.ends_at));
     setEditNotes(appt.notes || "");
+    setEditingGoogle(false);
+    setEditOpen(true);
+  };
+
+  const openGoogleEdit = (event: GoogleEvent) => {
+    setSelectedGoogleEvent(event);
+    const start = event.start.dateTime || event.start.date;
+    const end = event.end.dateTime || event.end.date;
+    setEditStartsAt(toDateTimeLocal(start));
+    setEditEndsAt(toDateTimeLocal(end));
+    setEditNotes(event.description || "");
+    setEditingGoogle(true);
     setEditOpen(true);
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAppointment) return;
     setEditing(true);
+
     try {
-      await api(`/v1/appointments/${selectedAppointment.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      if (editingGoogle && selectedGoogleEvent) {
+        // Edit Google event
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const params = new URLSearchParams({
           starts_at: toIsoString(editStartsAt),
           ends_at: toIsoString(editEndsAt),
+          summary: selectedGoogleEvent.summary || "",
           notes: editNotes
-        })
-      });
+        });
+
+        const res = await fetch(`${apiUrl}/v1/calendar/event/${selectedGoogleEvent.id}?${params}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Error actualizando evento de Google");
+        }
+
+        alert("Evento de Google actualizado correctamente.");
+      } else if (selectedAppointment) {
+        // Edit local appointment
+        await api(`/v1/appointments/${selectedAppointment.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            starts_at: toIsoString(editStartsAt),
+            ends_at: toIsoString(editEndsAt),
+            notes: editNotes
+          })
+        });
+      }
+
       setEditOpen(false);
       setRefreshKey((k) => k + 1);
     } catch (err) {
@@ -262,7 +302,11 @@ export default function AppointmentsPage() {
                         </button>
                       </div>
                     ) : (
-                      <Lock className="w-4 h-4 text-neutral-600 ml-auto" title="Gestionar en Google Calendar" />
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openGoogleEdit(item.raw)} className="text-blue-400 hover:text-blue-300 transition">
+                          Editar
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
