@@ -11,8 +11,12 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[ClientOut])
-def list_clients(q: str | None = Query(default=None, description="Optional search by name or phone"), db: Session = Depends(get_db)) -> list[ClientOut]:
-    stmt = select(Client).order_by(Client.name.asc(), Client.id.asc()).limit(100)
+def list_clients(
+    q: str | None = Query(default=None, description="Optional search by name or phone"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> list[ClientOut]:
+    stmt = select(Client).where(Client.user_id == current_user.id).order_by(Client.name.asc(), Client.id.asc()).limit(100)
     if q:
         pattern = f"%{q.lower()}%"
         stmt = stmt.where(or_(Client.name.ilike(pattern), Client.phone.ilike(pattern)))
@@ -24,9 +28,9 @@ def list_clients(q: str | None = Query(default=None, description="Optional searc
 def create_client(
     payload: ClientCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ClientOut:
-    client = Client(**payload.model_dump())
+    client = Client(**payload.model_dump(), user_id=current_user.id)
     db.add(client)
     db.commit()
     db.refresh(client)
@@ -34,9 +38,13 @@ def create_client(
 
 
 @router.get("/{client_id}", response_model=ClientOut)
-def get_client(client_id: int, db: Session = Depends(get_db)) -> ClientOut:
+def get_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> ClientOut:
     client = db.get(Client, client_id)
-    if not client:
+    if not client or client.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     return client
 
@@ -46,10 +54,10 @@ def update_client(
     client_id: int,
     payload: ClientUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ClientOut:
     client = db.get(Client, client_id)
-    if not client:
+    if not client or client.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(client, field, value)

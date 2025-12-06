@@ -74,11 +74,12 @@ def list_appointments(
     date_from: datetime | None = Query(default=None, description="Filter appointments starting after this datetime"),
     date_to: datetime | None = Query(default=None, description="Filter appointments starting before this datetime"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[AppointmentOut]:
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="date_from must be before date_to")
 
-    stmt = select(Appointment).order_by(Appointment.starts_at.asc(), Appointment.id.asc())
+    stmt = select(Appointment).where(Appointment.user_id == current_user.id).order_by(Appointment.starts_at.asc(), Appointment.id.asc())
     if date_from:
         stmt = stmt.where(Appointment.starts_at >= date_from)
     if date_to:
@@ -93,10 +94,10 @@ def create_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AppointmentOut:
-    _ensure_client_exists(db, payload.client_id)
+    _ensure_client_exists(db, payload.client_id, current_user.id)
     _validate_time_range(payload.starts_at, payload.ends_at)
 
-    appointment = Appointment(**payload.model_dump())
+    appointment = Appointment(**payload.model_dump(), user_id=current_user.id)
     db.add(appointment)
     db.commit()
     db.refresh(appointment)
@@ -110,15 +111,15 @@ def update_appointment(
     appointment_id: int,
     payload: AppointmentUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AppointmentOut:
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
 
     data = payload.model_dump(exclude_unset=True)
     client_id = data.get("client_id", appointment.client_id)
-    _ensure_client_exists(db, client_id)
+    _ensure_client_exists(db, client_id, current_user.id)
 
     starts_at = data.get("starts_at", appointment.starts_at)
     ends_at = data.get("ends_at", appointment.ends_at)
@@ -137,18 +138,19 @@ def update_appointment(
 def delete_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
 
     db.delete(appointment)
     db.commit()
 
 
-def _ensure_client_exists(db: Session, client_id: int) -> None:
-    if not db.get(Client, client_id):
+def _ensure_client_exists(db: Session, client_id: int, user_id: int) -> None:
+    client = db.get(Client, client_id)
+    if not client or client.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
 
 
