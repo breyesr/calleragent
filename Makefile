@@ -5,6 +5,10 @@ up:
 	$(COMPOSE) up -d --build
 
 down:
+	$(COMPOSE) down
+
+# Use this ONLY when you want to delete all data
+down-volumes:
 	$(COMPOSE) down -v
 
 logs:
@@ -17,7 +21,7 @@ migrate:
 	$(COMPOSE) exec backend alembic upgrade head
 
 restart:
-	$(COMPOSE) down && $(COMPOSE) up -d --build
+	$(COMPOSE) restart
 
 backend-shell:
 	$(COMPOSE) exec backend bash

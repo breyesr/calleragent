@@ -11,6 +11,7 @@ class Settings(BaseModel):
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    FRONTEND_PORT: str = os.getenv("FRONTEND_PORT", "3002")
 
     @property
     def CELERY_BROKER_URL(self) -> str:
